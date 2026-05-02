@@ -17,14 +17,18 @@ end
 
 if not IsAdmin then
     Notificar("Aviso", "Executado com sucesso, mas você não é admin!")
-    -- O script para aqui para usuários comuns
     return 
 end
 
 -- [[ CRIAÇÃO DA INTERFACE ]]
 local ScreenGui = Instance.new("ScreenGui", Player.PlayerGui)
 ScreenGui.Name = "GabezinhoPanel"
-ScreenGui.Enabled = false -- Começa fechado
+ScreenGui.Enabled = false 
+ScreenGui.ResetOnSpawn = false -- Mantém a GUI mesmo se você morrer
+-- ESTA LINHA ABAIXO FAZ ELA FICAR NA FRENTE DE TUDO:
+ScreenGui.DisplayOrder = 999999999 
+-- Se o seu executor suportar, ZIndexBehavior ajuda na sobreposição interna
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Global
 
 local MainFrame = Instance.new("Frame", ScreenGui)
 MainFrame.Size = UDim2.new(0, 450, 0, 320)
@@ -33,6 +37,7 @@ MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
 MainFrame.BorderSizePixel = 0
 MainFrame.Active = true
 MainFrame.Draggable = true
+MainFrame.ZIndex = 10 -- Garante que o frame interno também tenha prioridade
 
 local Corner = Instance.new("UICorner", MainFrame)
 Corner.CornerRadius = UDim.new(0, 12)
@@ -40,29 +45,31 @@ Corner.CornerRadius = UDim.new(0, 12)
 -- Título
 local Title = Instance.new("TextLabel", MainFrame)
 Title.Size = UDim2.new(1, 0, 0, 40)
-Title.Text = "GABEZINHO278 - ADMIN PANEL (K TO TOGGLE)"
+Title.Text = "GABEZINHO278 - ADMIN PANEL"
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 16
 Title.BackgroundTransparency = 1
+Title.ZIndex = 11
 
 -- [[ LÓGICA DE ABRIR/FECHAR E MOUSE ]]
 local function ToggleUI()
     ScreenGui.Enabled = not ScreenGui.Enabled
     
     if ScreenGui.Enabled then
-        -- AO ABRIR: Libera o mouse
+        -- AO ABRIR: Libera o mouse para clicar na GUI
         UserInputService.MouseIconEnabled = true
         UserInputService.MouseBehavior = Enum.MouseBehavior.Default
     else
-        -- AO FECHAR: Trava o mouse (estilo Shift Lock)
+        -- AO FECHAR: Trava o mouse (LockCenter)
         UserInputService.MouseBehavior = Enum.MouseBehavior.LockCenter
     end
 end
 
 -- Detectar Tecla K
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if not gameProcessed and input.KeyCode == Enum.KeyCode.K then
+    -- gameProcessed é ignorado aqui para garantir que o K funcione mesmo com o chat aberto se necessário
+    if input.KeyCode == Enum.KeyCode.K then
         ToggleUI()
     end
 end)
@@ -83,6 +90,7 @@ local function NewTab(name)
     btn.Text = name
     btn.TextColor3 = Color3.fromRGB(200, 200, 200)
     btn.Font = Enum.Font.Gotham
+    btn.ZIndex = 12
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
     return btn
 end
@@ -108,9 +116,12 @@ Player.Chatted:Connect(function(msg)
         local targetName = args[2]
         local text = msg:match('"(.-)"')
         if targetName == "all" then
-            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(text, "All")
+            local chatEvents = game:GetService("ReplicatedStorage"):FindFirstChild("DefaultChatSystemChatEvents")
+            if chatEvents then
+                chatEvents.SayMessageRequest:FireServer(text, "All")
+            end
         end
     end
 end)
 
-Notificar("Gabezinho Admin", "Script pronto! Aperte K para abrir.")
+Notificar("Gabezinho Admin", "Prioridade Máxima Ativada! Aperte K.")
