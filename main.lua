@@ -1,73 +1,62 @@
---[[
-    HEXER HUB - Oficial
-    Repositório: Tecvoi/Hexer_hub
-]]
+local UIS = game:GetService("UserInputService")
+local repo = 'https://raw.githubusercontent.com/violin-suzutsuki/LinoriaLib/main/'
+local Library = loadstring(game:HttpGet(repo .. 'Library.lua'))()
 
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-
-local Window = Rayfield:CreateWindow({
-   Name = "hexer_hub | a!sob",
-   LoadingTitle = "Iniciando Hexer Hub...",
-   LoadingSubtitle = "by Tecvoi",
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "HexerHubData"
-   },
-   Theme = "Default" -- Podemos ajustar as cores manualmente depois
+local Window = Library:CreateWindow({
+    Title = 'HEXER HUB | a!sob',
+    Center = true,
+    AutoShow = true,
+    TabPadding = 8
 })
 
--- ABAS (Baseadas nas suas prints)
-local MainTab = Window:CreateTab("Main", 4483362458) -- Ícone de casa
-local PlayerTab = Window:CreateTab("LocalPlayer", 4483362458) -- Ícone de usuário
-local VisualTab = Window:CreateTab("Visual", 4483362458)
-local AlvoTab = Window:CreateTab("Alvo", 4483362458)
+local Tabs = {
+    Main = Window:AddTab('Combat'),
+    ['Settings'] = Window:AddTab('Settings'),
+}
 
--- SEÇÃO DE COMBATE (image_95683c.png)
-MainTab:CreateSection("Combat")
+local LeftGroupBox = Tabs.Main:AddLeftGroupbox('Throwing Settings')
 
-MainTab:CreateToggle({
-   Name = "Super Strength",
-   CurrentValue = false,
-   Callback = function(Value)
-      _G.SuperStrength = Value
-      task.spawn(function()
-         while _G.SuperStrength do
-            -- Lógica para aumentar a força de arremesso
-            -- No jogo "Arremessa Coisas", isso geralmente envolve mudar atributos do corpo
-            task.wait(0.5)
-         end
-      end)
-   end,
+-- Toggle do Super Strength
+LeftGroupBox:AddToggle('SuperStrength', {
+    Text = 'Super Strength',
+    Default = false,
+    Tooltip = 'Arremessa forte com o Botão Direito',
 })
 
-MainTab:CreateSlider({
-   Name = "Strength",
-   Range = {0, 40000},
-   Increment = 100,
-   Suffix = " Power",
-   CurrentValue = 742,
-   Callback = function(Value)
-      -- Ajusta o valor da força global
-      _G.StrengthValue = Value
-   end,
+-- Slider de Força
+LeftGroupBox:AddSlider('StrengthPower', {
+    Text = 'Throwing Power',
+    Default = 742,
+    Min = 0,
+    Max = 40000,
+    Rounding = 0,
 })
 
--- SEÇÃO LOCAL PLAYER (image_956c3c.png)
-PlayerTab:CreateSection("Defence")
-
-PlayerTab:CreateToggle({
-   Name = "Anti-Grab",
-   CurrentValue = true,
-   Callback = function(Value)
-      _G.AntiGrab = Value
-      game:GetService("RunService").Stepped:Connect(function()
-         if _G.AntiGrab and game.Players.LocalPlayer.Character then
-            for _, v in pairs(game.Players.LocalPlayer.Character:GetDescendants()) do
-               if v:IsA("Weld") or v:IsA("ManualWeld") then
-                  v:Destroy()
-               end
+-- LOGICA DE ARREMESSO (Botão Direito)
+UIS.InputBegan:Connect(function(input, processed)
+    if not processed and input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if Toggles.SuperStrength.Value then
+            local char = game.Players.LocalPlayer.Character
+            if char then
+                -- Procura o que você está segurando
+                for _, obj in pairs(char:GetDescendants()) do
+                    if obj:IsA("Weld") or obj:IsA("ManualWeld") then
+                        local victim = obj.Part1 or obj.Part0
+                        if victim and victim.Parent:FindFirstChild("Humanoid") then
+                            obj:Destroy() -- Solta a pessoa
+                            
+                            -- Aplica o "Tiro"
+                            local bv = Instance.new("BodyVelocity")
+                            bv.Velocity = char.HumanoidRootPart.CFrame.LookVector * (Options.StrengthPower.Value / 10)
+                            bv.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+                            bv.Parent = victim
+                            game.Debris:AddItem(bv, 0.2)
+                        end
+                    end
+                end
             end
-         end
-      end)
-   end,
-})
+        end
+    end
+end)
+
+Library:Notify("Hexer Hub Carregado! Use o Botão Direito para arremessar.")
