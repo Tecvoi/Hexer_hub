@@ -1,173 +1,231 @@
--- [[ CONFIGURAÇÕES GLOBAIS ]]
-local AdminID = 2962384943 
-local Player = game.Players.LocalPlayer
-local UIS = game:GetService("UserInputService")
-local RS = game:GetService("ReplicatedStorage")
-local TS = game:GetService("TweenService")
+--[[
+FTAP Consolidated Script (Blitz Hub Style)
+Autor: User (Baseado em lógicas públicas de Velocity, Clone e Teleport)
+Data: 03/05/2026
+Uso: Copie para VSCode, edite as CONFIG e suba ao GitHub.
+Execução: loadstring(game:HttpGet("SEU_LINK_RAW_AQUI"))()
+]]
 
--- [[ MOTOR DE COMANDO OBRIGATÓRIO ]]
--- Esta parte garante que todos os "clientes" obedeçam você instantaneamente
-local function ExecuteForce(msg)
-    local args = msg:split(" ")
-    local cmd = args[1]:lower()
-    local target = args[2]
+-- ==============================================================================
+-- ⚙️ CONFIGURAÇÕES GERAIS (EDITE AQUI)
+-- ==============================================================================
+local CONFIG = {
+Mode = "All", -- Opções: "Velocity", "Clone", "Teleport", "All"
+FlingStrength = 3000, -- Força do lançamento (500 a 10000)
+AntiGrabEnabled = true, -- Ativa proteção contra agarres
+AutoClean = true, -- Remove objetos criados após 2 segundos
 
-    if target == "all" or (target and Player.Name:lower():find(target:lower())) then
-        if cmd == ":kill" then
-            if Player.Character then Player.Character:BreakJoints() end
-        elseif cmd == ":chat" then
-            local text = msg:match('"(.-)"')
-            local sayEvent = RS:FindFirstChild("SayMessageRequest", true) or RS:FindFirstChild("DefaultChatSystemChatEvents"):FindFirstChild("SayMessageRequest")
-            if sayEvent then sayEvent:FireServer(text, "All") end
-        end
-    end
+-- Keybinds (Teclas de Atalho)
+Keys = {
+Fling = Enum.KeyCode.F, -- Lança alvo mais próximo (Velocity)
+CloneFling = Enum.KeyCode.G, -- Lança todos via Clone/Torque
+TeleFling = Enum.KeyCode.T, -- Teleporta e lança todos
+ToggleAntiGrab = Enum.KeyCode.Z -- Liga/Desliga Anti-Grab
+}
+}
+
+-- ==============================================================================
+-- 🔧 SERVIÇOS E VARIÁVEIS LOCAIS
+-- ==============================================================================
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
+
+local ActiveConnections = {} -- Para limpar conexões se necessário
+
+-- ==============================================================================
+-- 🛡️ SISTEMA ANTI-GRAB (Proteção Passiva)
+-- ==============================================================================
+local AntiGrabConnection = nil
+
+local function StartAntiGrab()
+if not CONFIG.AntiGrabEnabled then return end
+
+AntiGrabConnection = RunService.Heartbeat:Connect(function()
+if Character and HumanoidRootPart then
+-- Empurra levemente para cima para evitar travamento em grabs
+HumanoidRootPart.CFrame = HumanoidRootPart.CFrame * CFrame.new(0, 0.5, 0)
+end
+end)
+print(" Anti-Grab ativado.")
 end
 
--- Escuta ativa para todos os usuários
-local function ConnectToAdmin(admin)
-    admin.Chatted:Connect(ExecuteForce)
+local function StopAntiGrab()
+if AntiGrabConnection then
+AntiGrabConnection:Disconnect()
+AntiGrabConnection = nil
+print(" Anti-Grab desativado.")
+end
 end
 
-local currentAdmin = game.Players:GetPlayerByUserId(AdminID)
-if currentAdmin then ConnectToAdmin(currentAdmin) end
-game.Players.PlayerAdded:Connect(function(p) if p.UserId == AdminID then ConnectToAdmin(p) end end)
+-- ==============================================================================
+-- 🚀 MÉTODO 1: BODY VELOCITY (Físico Direto)
+-- ==============================================================================
+local function GetClosestTarget()
+local closestDist = math.huge
+local closestTarget = nil
 
--- Bloqueio de interface para não-admins
-if not (Player.UserId == AdminID) then return end
-
--- [[ INTERFACE PREMIUM (DESIGN DARK GLASS) ]]
-local ScreenGui = Instance.new("ScreenGui", Player.PlayerGui)
-ScreenGui.Name = "HexerV3"
-ScreenGui.DisplayOrder = 2147483647
-ScreenGui.IgnoreGuiInset = true
-ScreenGui.Enabled = false
-
-local Main = Instance.new("Frame", ScreenGui)
-Main.Size = UDim2.new(0, 600, 0, 400)
-Main.Position = UDim2.new(0.5, -300, 0.5, -200)
-Main.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
-Main.BorderSizePixel = 0
-Main.ClipsDescendants = true
-Instance.new("UICorner", Main).CornerRadius = UDim.new(0, 10)
-local Stroke = Instance.new("UIStroke", Main)
-Stroke.Color = Color3.fromRGB(45, 45, 45)
-Stroke.Thickness = 1.5
-
--- Sidebar
-local Sidebar = Instance.new("Frame", Main)
-Sidebar.Size = UDim2.new(0, 160, 1, 0)
-Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
-Sidebar.BorderSizePixel = 0
-
--- Botões de Aba (Função de Criação)
-local function CreateTab(name, icon, pos)
-    local btn = Instance.new("TextButton", Sidebar)
-    btn.Size = UDim2.new(1, -20, 0, 40)
-    btn.Position = UDim2.new(0, 10, 0, pos)
-    btn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-    btn.Text = "  " .. name
-    btn.TextColor3 = Color3.fromRGB(200, 200, 200)
-    btn.Font = Enum.Font.GothamMedium
-    btn.TextXAlignment = Enum.TextXAlignment.Left
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-    
-    -- Efeito Hover
-    btn.MouseEnter:Connect(function() TS:Create(btn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(40, 40, 40)}):Play() end)
-    btn.MouseLeave:Connect(function() TS:Create(btn, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(30, 30, 30)}):Play() end)
-    
-    return btn
+for _, player in ipairs(Players:GetPlayers()) do
+if player ~= LocalPlayer and player.Character then
+local head = player.Character:FindFirstChild("Head")
+if head then
+local dist = (head.Position - HumanoidRootPart.Position).Magnitude
+if dist < closestDist then
+closestDist = dist
+closestTarget = head
+end
+end
+end
+end
+return closestTarget
 end
 
-local btnAdmin = CreateTab("ADMIN", "", 60)
-local btnUsers = CreateTab("USERS LIST", "", 110)
+local function FlingVelocity(targetPart)
+if not targetPart or not targetPart:IsA("BasePart") then return end
 
--- Container de Conteúdo
-local Container = Instance.new("Frame", Main)
-Container.Size = UDim2.new(1, -180, 1, -20)
-Container.Position = UDim2.new(0, 170, 0, 10)
-Container.BackgroundTransparency = 1
+local direction = (targetPart.Position - HumanoidRootPart.Position).Unit
+local velocity = direction * CONFIG.FlingStrength
 
--- PÁGINA ADMIN
-local PageAdmin = Instance.new("Frame", Container)
-PageAdmin.Size = UDim2.new(1, 0, 1, 0)
-PageAdmin.BackgroundTransparency = 1
+local bodyVel = Instance.new("BodyVelocity")
+bodyVel.Velocity = velocity
+bodyVel.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+bodyVel.Parent = targetPart
 
-local InputName = Instance.new("TextBox", PageAdmin)
-InputName.Size = UDim2.new(1, 0, 0, 45)
-InputName.PlaceholderText = "Target Name (ex: all)"
-InputName.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-InputName.TextColor3 = Color3.new(1,1,1)
-InputName.Font = Enum.Font.Gotham
-Instance.new("UICorner", InputName)
-
-local InputChat = Instance.new("TextBox", PageAdmin)
-InputChat.Size = UDim2.new(1, 0, 0, 45)
-InputChat.Position = UDim2.new(0, 0, 0, 55)
-InputChat.PlaceholderText = "Forced Message Content"
-InputChat.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-InputChat.TextColor3 = Color3.new(1,1,1)
-InputChat.Font = Enum.Font.Gotham
-Instance.new("UICorner", InputChat)
-
-local function Action(name, pos, color, cmdType)
-    local b = Instance.new("TextButton", PageAdmin)
-    b.Size = UDim2.new(0.48, 0, 0, 50)
-    b.Position = pos
-    b.Text = name
-    b.BackgroundColor3 = color
-    b.Font = Enum.Font.GothamBold
-    b.TextColor3 = Color3.new(1,1,1)
-    Instance.new("UICorner", b)
-    
-    b.MouseButton1Click:Connect(function()
-        if cmdType == "kill" then
-            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(":kill " .. InputName.Text, "All")
-        elseif cmdType == "chat" then
-            game:GetService("ReplicatedStorage").DefaultChatSystemChatEvents.SayMessageRequest:FireServer(':chat ' .. InputName.Text .. ' "' .. InputChat.Text .. '"', "All")
-        end
-    end)
+if CONFIG.AutoClean then
+Debris:AddItem(bodyVel, 0.5)
+end
 end
 
-Action("KILL TARGET", UDim2.new(0, 0, 0, 120), Color3.fromRGB(150, 0, 0), "kill")
-Action("FORCE CHAT", UDim2.new(0.52, 0, 0, 120), Color3.fromRGB(0, 100, 200), "chat")
+-- ==============================================================================
+-- 🧬 MÉTODO 2: CLONE + TORQUE (Simulação de Física)
+-- ==============================================================================
+local function FlingClone(targetPlayer)
+local targetChar = targetPlayer.Character
+if not targetChar or not Character then return end
 
--- PÁGINA USERS
-local PageUsers = Instance.new("ScrollingFrame", Container)
-PageUsers.Size = UDim2.new(1, 0, 1, 0)
-PageUsers.BackgroundTransparency = 1
-PageUsers.Visible = false
-local ListLayout = Instance.new("UIListLayout", PageUsers)
-ListLayout.Padding = UDim.new(0, 5)
+local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+if not targetHRP then return end
 
--- Alternar Abas
-btnAdmin.MouseButton1Click:Connect(function() PageAdmin.Visible = true PageUsers.Visible = false end)
-btnUsers.MouseButton1Click:Connect(function() 
-    PageAdmin.Visible = false PageUsers.Visible = true 
-    for _,v in pairs(PageUsers:GetChildren()) do if v:IsA("Frame") then v:Destroy() end end
-    for _,p in pairs(game.Players:GetPlayers()) do
-        local f = Instance.new("Frame", PageUsers)
-        f.Size = UDim2.new(1, -10, 0, 30)
-        f.BackgroundColor3 = Color3.fromRGB(30,30,30)
-        Instance.new("UICorner", f)
-        local t = Instance.new("TextLabel", f)
-        t.Size = UDim2.new(1, -10, 1, 0)
-        t.Position = UDim2.new(0, 10, 0, 0)
-        t.Text = p.Name .. " (Ativo)"
-        t.TextColor3 = Color3.new(1,1,1)
-        t.BackgroundTransparency = 1
-        t.TextXAlignment = "Left"
-    end
+-- Clona o personagem local para usar como âncora de força
+local clone = Character:Clone()
+clone.Name = "FlingClone_".. targetPlayer.Name
+clone.Parent = workspace
+
+-- Posiciona o clone atrás do alvo
+clone:PivotTo(targetHRP.CFrame * CFrame.new(0, 0, -10))
+
+-- Cria a restrição física
+local ballSocket = Instance.new("BallSocketConstraint")
+ballSocket.Part0 = targetHRP
+ballSocket.Part1 = clone:FindFirstChild("HumanoidRootPart")
+ballSocket.Parent = workspace
+
+-- Aplica torque giratório violento
+local bodyGyro = Instance.new("BodyGyro")
+bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+bodyGyro.P = 5000
+bodyGyro.D = 0
+bodyGyro.Parent = targetHRP
+
+local connection
+connection = RunService.Heartbeat:Connect(function()
+if not targetHRP or not targetHRP.Parent then
+connection:Disconnect()
+return
+end
+bodyGyro.CFrame = targetHRP.CFrame * CFrame.Angles(0, math.rad(180), 0)
 end)
 
--- [[ TECLA K E MOUSE CONTROLLER ]]
-UIS.InputBegan:Connect(function(input)
-    if input.KeyCode == Enum.KeyCode.K then
-        ScreenGui.Enabled = not ScreenGui.Enabled
-        if ScreenGui.Enabled then
-            UIS.MouseBehavior = Enum.MouseBehavior.Default
-            TS:Create(Main, TweenInfo.new(0.5, Enum.EasingStyle.Back), {Position = UDim2.new(0.5, -300, 0.5, -200)}):Play()
-        else
-            UIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-        end
-    end
+-- Limpeza automática
+if CONFIG.AutoClean then
+delay(2, function()
+if ballSocket then ballSocket:Destroy() end
+if clone then clone:Destroy() end
+if bodyGyro then bodyGyro:Destroy() end
+connection:Disconnect()
 end)
+end
+end
+
+-- ==============================================================================
+-- 📍 MÉTODO 3: TELEPORT + IMPULSO (Instantâneo)
+-- ==============================================================================
+local function FlingTeleport(targetPlayer)
+local targetChar = targetPlayer.Character
+if not targetChar then return end
+
+local targetHRP = targetChar:FindFirstChild("HumanoidRootPart")
+if not targetHRP then return end
+
+-- Teleporta o alvo para 5 unidades na frente do jogador
+local newPos = HumanoidRootPart.CFrame * CFrame.new(0, 0, -5)
+targetHRP.CFrame = newPos
+
+-- Aplica impulso vertical imediato
+local bodyVel = Instance.new("BodyVelocity")
+bodyVel.Velocity = Vector3.new(0, CONFIG.FlingStrength / 10, 0)
+bodyVel.MaxForce = Vector3.new(0, math.huge, 0)
+bodyVel.Parent = targetHRP
+
+if CONFIG.AutoClean then
+Debris:AddItem(bodyVel, 0.3)
+end
+end
+
+-- ==============================================================================
+-- ⌨️ SISTEMA DE INPUT (Teclado)
+-- ==============================================================================
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+if gameProcessed then return end -- Ignora se estiver digitando no chat
+
+-- Toggle Anti-Grab
+if input.KeyCode == CONFIG.Keys.ToggleAntiGrab then
+if AntiGrabConnection then
+StopAntiGrab()
+else
+StartAntiGrab()
+end
+end
+
+-- Fling Velocity (Alvo Único)
+if input.KeyCode == CONFIG.Keys.Fling and (CONFIG.Mode == "Velocity" or CONFIG.Mode == "All") then
+local target = GetClosestTarget()
+if target then
+FlingVelocity(target)
+print(" Velocity Fling executado em: ".. target.Parent.Name)
+end
+end
+
+-- Fling Clone (Todos os Jogadores)
+if input.KeyCode == CONFIG.Keys.CloneFling and (CONFIG.Mode == "Clone" or CONFIG.Mode == "All") then
+for _, player in ipairs(Players:GetPlayers()) do
+if player ~= LocalPlayer then
+FlingClone(player)
+end
+end
+print(" Clone Fling executado em todos.")
+end
+
+-- Fling Teleport (Todos os Jogadores)
+if input.KeyCode == CONFIG.Keys.TeleFling and (CONFIG.Mode == "Teleport" or CONFIG.Mode == "All") then
+for _, player in ipairs(Players:GetPlayers()) do
+if player ~= LocalPlayer then
+FlingTeleport(player)
+end
+end
+print(" Teleport Fling executado em todos.")
+end
+end)
+
+-- ==============================================================================
+-- 🚀 INICIALIZAÇÃO
+-- ==============================================================================
+print(" Script carregado com sucesso!")
+print(" Modo atual: ".. CONFIG.Mode)
+print(" Controles: F (Velocity), G (Clone), T (Teleport), Z (Anti-Grab)")
+StartAntiGrab()
