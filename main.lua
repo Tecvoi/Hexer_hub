@@ -1,7 +1,7 @@
 -- ============================================
 -- HEXER_HUB - Fling Things and People
 -- Credits: Nydev and LeoLeoVip
--- Biblioteca: Fluent UI (Estilo Windows 11)
+-- Biblioteca: Fluent UI (COMPLETO)
 -- ============================================
 
 -- CARREGAR FLUENT UI
@@ -9,7 +9,7 @@ local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/
 local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- DETECÇÃO DE RESOLUÇÃO DA TELA
+-- DETECÇÃO DE RESOLUÇÃO
 local camera = workspace.CurrentCamera
 local screenSize = camera.ViewportSize
 local screenWidth = screenSize.X
@@ -35,7 +35,7 @@ print("[Hexer_hub] Creditos: Nydev and LeoLeoVip")
 -- CRIAR JANELA
 local Window = Fluent:CreateWindow({
     Title = "Hexer_hub",
-    SubTitle = "by Nydev and LeoLeoVip",
+    SubTitle = "by Nydev and LeoLeoVip | Super Strength & Object Grab",
     TabWidth = 160,
     Size = UDim2.new(0, windowWidth, 0, windowHeight),
     Acrylic = true,
@@ -43,7 +43,7 @@ local Window = Fluent:CreateWindow({
     MinimizeKey = Enum.KeyCode.RightControl
 })
 
--- CORREÇÃO DO SCROLL DO MOUSE
+-- CORREÇÃO DO SCROLL
 local UserInputService = game:GetService("UserInputService")
 UserInputService.MouseWheelBackward:Connect(function()
     pcall(function()
@@ -73,6 +73,7 @@ local Players = game:GetService("Players")
 local Debris = game:GetService("Debris")
 local localPlayer = Players.LocalPlayer
 local playerCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
+
 localPlayer.CharacterAdded:Connect(function(character)
     playerCharacter = character
 end)
@@ -87,6 +88,7 @@ local DestroyToy = MenuToys:WaitForChild("DestroyToy")
 -- VARIÁVEIS DAS FUNÇÕES
 local AutoRecoverDroppedPartsCoroutine
 local antiExplosionConnection
+local characterAddedConn
 local strengthConnection
 local autoStruggleCoroutine
 local autoDefendCoroutine
@@ -94,10 +96,10 @@ local anchoredParts = {}
 local anchoredConnections = {}
 local compiledGroups = {}
 local compileConnections = {}
+local renderSteppedConnections = {}
 local compileCoroutine
 local fireAllCoroutine
 local connections = {}
-local renderSteppedConnections = {}
 local crouchJumpCoroutine
 local crouchSpeedCoroutine
 local anchorGrabCoroutine
@@ -109,6 +111,7 @@ local noclipGrabCoroutine
 local antiKickCoroutine
 local kickGrabConnections = {}
 local blobmanCoroutine
+local ragdollAllCoroutine
 
 local skolko = ""
 local decoyOffset = 15
@@ -117,11 +120,14 @@ local circleRadius = 10
 local crouchWalkSpeed = 50
 local crouchJumpPower = 50
 local followMode = true
+local anchorKickCoroutine
 
 local toysFolder = workspace:FindFirstChild(localPlayer.Name.."SpawnedInToys")
 local ownedToys = {}
 _G.strength = 400
 _G.BlobmanDelay = 0.005
+_G.ToyToLoad = "BombMissile"
+_G.MaxMissiles = 9
 
 local U = loadstring(game:HttpGet("https://paste.ee/r/7X7NLEPB", true))()
 
@@ -297,6 +303,42 @@ local function fireAll()
     end
 end
 
+local function ragdollAll()
+    while true do
+        pcall(function()
+            if not toysFolder:FindFirstChild("FoodBanana") then
+                spawnItem("FoodBanana", Vector3.new(-72.9304581, -5.96906614, -265.543732))
+            end
+            local banana = toysFolder:WaitForChild("FoodBanana")
+            local bananaPeel
+            for _, part in pairs(banana:GetChildren()) do
+                if part.Name == "BananaPeel" and part:FindFirstChild("TouchInterest") then
+                    part.Size = Vector3.new(10, 10, 10)
+                    part.Transparency = 1
+                    bananaPeel = part
+                    break
+                end
+            end
+            local bodyPosition = Instance.new("BodyPosition")
+            bodyPosition.P = 20000
+            bodyPosition.Parent = banana.Main
+            while true do
+                for _, player in pairs(Players:GetChildren()) do
+                    pcall(function()
+                        if player.Character and player.Character ~= playerCharacter then
+                            bananaPeel.Position = player.Character.HumanoidRootPart.Position or player.Character.Head.Position
+                            bodyPosition.Position = playerCharacter.Head.Position + Vector3.new(0, 600, 0)
+                            wait()
+                        end
+                    end)
+                end
+                wait()
+            end
+        end)
+        wait()
+    end
+end
+
 local function createHighlight(parent)
     local highlight = Instance.new("Highlight")
     highlight.DepthMode = Enum.HighlightDepthMode.Occluded
@@ -306,6 +348,15 @@ local function createHighlight(parent)
     highlight.OutlineTransparency = 0.5
     highlight.Parent = parent
     return highlight
+end
+
+local function onPartOwnerAdded(descendant, primaryPart)
+    if descendant.Name == "PartOwner" and descendant.Value ~= localPlayer.Name then
+        local highlight = primaryPart:FindFirstChild("Highlight") or (primaryPart.Parent and primaryPart.Parent:FindFirstChild("Highlight"))
+        if highlight then
+            highlight.OutlineColor = descendant.Value ~= localPlayer.Name and Color3.new(1, 0, 0) or Color3.new(0, 0, 1)
+        end
+    end
 end
 
 local function createBodyMovers(part, position, rotation)
@@ -342,7 +393,36 @@ local function anchorGrab()
                 local target = primaryPart.Parent and primaryPart.Parent:IsA("Model") and primaryPart.Parent ~= workspace and primaryPart.Parent or primaryPart
                 createHighlight(target)
                 table.insert(anchoredParts, primaryPart)
+                local connection = target.DescendantAdded:Connect(function(descendant)
+                    onPartOwnerAdded(descendant, primaryPart)
+                end)
+                table.insert(anchoredConnections, connection)
             end
+            for _, child in ipairs(primaryPart:GetChildren()) do
+                if child:IsA("BodyPosition") or child:IsA("BodyGyro") then
+                    child:Destroy()
+                end
+            end
+            while workspace:FindFirstChild("GrabParts") do wait() end
+            createBodyMovers(primaryPart, primaryPart.Position, primaryPart.CFrame)
+        end)
+        wait()
+    end
+end
+
+local function anchorKickGrab()
+    while true do
+        pcall(function()
+            local grabParts = workspace:FindFirstChild("GrabParts")
+            if not grabParts then return end
+            local grabPart = grabParts:FindFirstChild("GrabPart")
+            if not grabPart then return end
+            local weldConstraint = grabPart:FindFirstChild("WeldConstraint")
+            if not weldConstraint or not weldConstraint.Part1 then return end
+            local primaryPart = weldConstraint.Part1
+            if not primaryPart then return end
+            if isDescendantOf(primaryPart, workspace.Map) then return end
+            if primaryPart.Name ~= "FirePlayerPart" then return end
             for _, child in ipairs(primaryPart:GetChildren()) do
                 if child:IsA("BodyPosition") or child:IsA("BodyGyro") then
                     child:Destroy()
@@ -368,6 +448,97 @@ local function cleanupAnchoredParts()
     anchoredParts = {}
 end
 
+local function updateBodyMovers(primaryPart)
+    for _, group in ipairs(compiledGroups) do
+        if group.primaryPart and group.primaryPart == primaryPart then
+            for _, data in ipairs(group.group) do
+                local bodyPosition = data.part:FindFirstChild("BodyPosition")
+                local bodyGyro = data.part:FindFirstChild("BodyGyro")
+                if bodyPosition then
+                    bodyPosition.Position = (primaryPart.CFrame * data.offset).Position
+                end
+                if bodyGyro then
+                    bodyGyro.CFrame = primaryPart.CFrame * data.offset
+                end
+            end
+        end
+    end
+end
+
+local function compileGroup()
+    if #anchoredParts == 0 then
+        Fluent:Notify({Title = "Error", Content = "No anchored parts found", Duration = 3})
+        return
+    end
+    Fluent:Notify({Title = "Success", Content = "Compiled "..#anchoredParts.." toys together", Duration = 3})
+    
+    local primaryPart = anchoredParts[1]
+    if not primaryPart then return end
+    
+    local highlight = primaryPart:FindFirstChild("Highlight") or (primaryPart.Parent and primaryPart.Parent:FindFirstChild("Highlight"))
+    if not highlight then
+        highlight = createHighlight(primaryPart.Parent:IsA("Model") and primaryPart.Parent or primaryPart)
+    end
+    highlight.OutlineColor = Color3.new(0, 1, 0)
+    
+    local group = {}
+    for _, part in ipairs(anchoredParts) do
+        if part ~= primaryPart then
+            local offset = primaryPart.CFrame:toObjectSpace(part.CFrame)
+            table.insert(group, {part = part, offset = offset})
+        end
+    end
+    table.insert(compiledGroups, {primaryPart = primaryPart, group = group})
+    
+    local connection = primaryPart:GetPropertyChangedSignal("CFrame"):Connect(function()
+        updateBodyMovers(primaryPart)
+    end)
+    table.insert(compileConnections, connection)
+    
+    local renderSteppedConnection = RunService.Heartbeat:Connect(function()
+        updateBodyMovers(primaryPart)
+    end)
+    table.insert(renderSteppedConnections, renderSteppedConnection)
+end
+
+local function cleanupCompiledGroups()
+    for _, groupData in ipairs(compiledGroups) do
+        for _, data in ipairs(groupData.group) do
+            if data.part then
+                if data.part:FindFirstChild("BodyPosition") then data.part.BodyPosition:Destroy() end
+                if data.part:FindFirstChild("BodyGyro") then data.part.BodyGyro:Destroy() end
+            end
+        end
+        if groupData.primaryPart and groupData.primaryPart.Parent then
+            local highlight = groupData.primaryPart:FindFirstChild("Highlight") or groupData.primaryPart.Parent:FindFirstChild("Highlight")
+            if highlight then highlight:Destroy() end
+        end
+    end
+    cleanupConnections(compileConnections)
+    cleanupConnections(renderSteppedConnections)
+    compiledGroups = {}
+end
+
+local function compileCoroutineFunc()
+    while true do
+        pcall(function()
+            for _, groupData in ipairs(compiledGroups) do
+                updateBodyMovers(groupData.primaryPart)
+            end
+        end)
+        wait()
+    end
+end
+
+local function unanchorPrimaryPart()
+    local primaryPart = anchoredParts[1]
+    if not primaryPart then return end
+    if primaryPart:FindFirstChild("BodyPosition") then primaryPart.BodyPosition:Destroy() end
+    if primaryPart:FindFirstChild("BodyGyro") then primaryPart.BodyGyro:Destroy() end
+    local highlight = primaryPart.Parent:FindFirstChild("Highlight") or primaryPart:FindFirstChild("Highlight")
+    if highlight then highlight:Destroy() end
+end
+
 local function recoverParts()
     while true do
         pcall(function()
@@ -380,6 +551,9 @@ local function recoverParts()
                             local highlight = partModel:FindFirstChild("Highlight") or (partModel.Parent and partModel.Parent:FindFirstChild("Highlight"))
                             if highlight and highlight.OutlineColor == Color3.new(1, 0, 0) then
                                 SetNetworkOwner:FireServer(partModel, partModel.CFrame)
+                                if partModel:FindFirstChild("PartOwner") and partModel.PartOwner.Value == localPlayer.Name then
+                                    highlight.OutlineColor = Color3.new(0, 0, 1)
+                                end
                             end
                         end
                     end)()
@@ -402,18 +576,49 @@ local function kickGrab()
             end
         end
     end
+    local function handleCharacterAdded(player)
+        local characterAddedConnection = player.CharacterAdded:Connect(function(character)
+            local hrp = character:WaitForChild("HumanoidRootPart")
+            local fpp = hrp:WaitForChild("FirePlayerPart")
+            fpp.Size = Vector3.new(4.5, 5, 4.5)
+            fpp.CollisionGroup = "1"
+            fpp.CanQuery = true
+        end)
+        table.insert(kickGrabConnections, characterAddedConnection)
+    end
+    for _, player in pairs(Players:GetPlayers()) do
+        handleCharacterAdded(player)
+    end
+    local playerAddedConnection = Players.PlayerAdded:Connect(handleCharacterAdded)
+    table.insert(kickGrabConnections, playerAddedConnection)
 end
 
+local function setupAntiExplosion(character)
+    local ragdolled = character:WaitForChild("Humanoid"):FindFirstChild("Ragdolled")
+    if ragdolled then
+        antiExplosionConnection = ragdolled:GetPropertyChangedSignal("Value"):Connect(function()
+            for _, part in ipairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.Anchored = ragdolled.Value
+                end
+            end
+        end)
+    end
+end
+
+local blobalter = 1
 local function blobGrabPlayer(player, blobman)
-    local leftDetector = blobman:FindFirstChild("LeftDetector")
-    local rightDetector = blobman:FindFirstChild("RightDetector")
-    if leftDetector and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-        local args = {leftDetector, player.Character.HumanoidRootPart, leftDetector:FindFirstChild("LeftWeld")}
-        blobman:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(unpack(args))
-        task.wait(_G.BlobmanDelay)
-        if rightDetector then
-            local args2 = {rightDetector, player.Character.HumanoidRootPart, rightDetector:FindFirstChild("RightWeld")}
-            blobman:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(unpack(args2))
+    if blobalter == 1 then
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local args = {blobman:FindFirstChild("LeftDetector"), player.Character.HumanoidRootPart, blobman:FindFirstChild("LeftDetector"):FindFirstChild("LeftWeld")}
+            blobman:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(unpack(args))
+            blobalter = 2
+        end
+    else
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local args = {blobman:FindFirstChild("RightDetector"), player.Character.HumanoidRootPart, blobman:FindFirstChild("RightDetector"):FindFirstChild("RightWeld")}
+            blobman:WaitForChild("BlobmanSeatAndOwnerScript"):WaitForChild("CreatureGrab"):FireServer(unpack(args))
+            blobalter = 1
         end
     end
 end
@@ -430,8 +635,10 @@ local Tabs = {
     Scripts = Window:AddTab({Title = "Scripts", Icon = "code"})
 }
 
+-- ============================================
 -- HOME TAB
-local HomeSection = Tabs.Home:AddSection("Hexer_hub")
+-- ============================================
+Tabs.Home:AddSection("Hexer_hub")
 Tabs.Home:AddParagraph("Credits", "Nydev and LeoLeoVip")
 Tabs.Home:AddParagraph("Welcome", "Welcome to Hexer_hub! " .. localPlayer.Name .. " | Screen: " .. screenWidth .. "x" .. screenHeight)
 
@@ -444,24 +651,27 @@ Tabs.Home:AddButton({
     end
 })
 
--- COMBAT TAB
-local CombatSection = Tabs.Combat:AddSection("Combat Settings")
+-- ============================================
+-- COMBAT TAB (SUPER STRENGTH AQUI!)
+-- ============================================
+Tabs.Combat:AddSection("Super Strength - Throw Objects/Players")
 
 Tabs.Combat:AddSlider({
     Title = "Strength Power",
-    Description = "Adjust throwing force",
+    Description = "How hard to throw grabbed objects/players",
     Min = 300,
     Max = 10000,
-    Default = 300,
+    Default = 500,
     Rounding = 1,
     Callback = function(Value)
         _G.strength = Value
+        Fluent:Notify({Title = "Strength", Content = "Set to " .. Value .. "!", Duration = 1})
     end
 })
 
 Tabs.Combat:AddToggle({
-    Title = "Strength",
-    Description = "Throw grabbed objects with force",
+    Title = "SUPER STRENGTH (ACTIVE)",
+    Description = "Hold right-click after grabbing to LAUNCH objects/players!",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -472,10 +682,11 @@ Tabs.Combat:AddToggle({
                         local velocityObj = Instance.new("BodyVelocity", partToImpulse)
                         model:GetPropertyChangedSignal("Parent"):Connect(function()
                             if not model.Parent then
-                                if game:GetService("UserInputService"):GetLastInputType() == Enum.UserInputType.MouseButton2 then
+                                if UserInputService:GetLastInputType() == Enum.UserInputType.MouseButton2 then
                                     velocityObj.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
                                     velocityObj.Velocity = workspace.CurrentCamera.CFrame.LookVector * _G.strength
                                     Debris:AddItem(velocityObj, 1)
+                                    Fluent:Notify({Title = "LAUNCH!", Content = "Object thrown with " .. _G.strength .. " force!", Duration = 1})
                                 else
                                     velocityObj:Destroy()
                                 end
@@ -484,8 +695,10 @@ Tabs.Combat:AddToggle({
                     end
                 end
             end)
+            Fluent:Notify({Title = "Super Strength", Content = "ACTIVATED! Grab someone/object and right-click to launch!", Duration = 4})
         elseif strengthConnection then
             strengthConnection:Disconnect()
+            Fluent:Notify({Title = "Super Strength", Content = "DEACTIVATED", Duration = 2})
         end
     end
 })
@@ -494,6 +707,7 @@ Tabs.Combat:AddSection("Grab Effects")
 
 Tabs.Combat:AddToggle({
     Title = "Poison Grab",
+    Description = "Poison the grabbed player",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -511,6 +725,7 @@ Tabs.Combat:AddToggle({
 
 Tabs.Combat:AddToggle({
     Title = "Radioactive Grab",
+    Description = "Radioactive effect on grabbed player",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -528,6 +743,7 @@ Tabs.Combat:AddToggle({
 
 Tabs.Combat:AddToggle({
     Title = "Fire Grab",
+    Description = "Set grabbed player on fire",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -542,6 +758,7 @@ Tabs.Combat:AddToggle({
 
 Tabs.Combat:AddToggle({
     Title = "Noclip Grab",
+    Description = "Make grabbed player phase through walls",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -556,6 +773,7 @@ Tabs.Combat:AddToggle({
 
 Tabs.Combat:AddToggle({
     Title = "Kick Grab",
+    Description = "Kick effect on grabbed player",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -569,24 +787,60 @@ Tabs.Combat:AddToggle({
     end
 })
 
-Tabs.Combat:AddSection("All Features")
+Tabs.Combat:AddToggle({
+    Title = "Kick Grab Anchor",
+    Description = "Anchor kick grab effect",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            if not anchorKickCoroutine or coroutine.status(anchorKickCoroutine) == "dead" then
+                anchorKickCoroutine = coroutine.create(anchorKickGrab)
+                coroutine.resume(anchorKickCoroutine)
+            end
+        elseif anchorKickCoroutine then
+            coroutine.close(anchorKickCoroutine)
+            anchorKickCoroutine = nil
+        end
+    end
+})
+
+Tabs.Combat:AddSection("Mass Destruction")
+
+Tabs.Combat:AddToggle({
+    Title = "Ragdoll All",
+    Description = "Make everyone ragdoll (Banana method)",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            ragdollAllCoroutine = coroutine.create(ragdollAll)
+            coroutine.resume(ragdollAllCoroutine)
+        elseif ragdollAllCoroutine then
+            coroutine.close(ragdollAllCoroutine)
+            ragdollAllCoroutine = nil
+        end
+    end
+})
 
 Tabs.Combat:AddToggle({
     Title = "Fire All",
-    Description = "Caution: Remove campfires first!",
+    Description = "BURN EVERYONE! (Remove campfires first)",
     Default = false,
     Callback = function(Value)
         if Value then
             fireAllCoroutine = coroutine.create(fireAll)
             coroutine.resume(fireAllCoroutine)
+            Fluent:Notify({Title = "Fire All", Content = "ACTIVATED - Everyone burns!", Duration = 3})
         elseif fireAllCoroutine then
             coroutine.close(fireAllCoroutine)
             fireAllCoroutine = nil
+            Fluent:Notify({Title = "Fire All", Content = "DEACTIVATED", Duration = 2})
         end
     end
 })
 
+-- ============================================
 -- LOCAL PLAYER TAB
+-- ============================================
 Tabs.Player:AddSection("Player Settings")
 
 Tabs.Player:AddToggle({
@@ -662,17 +916,21 @@ Tabs.Player:AddSlider({
     end
 })
 
--- OBJECT GRAB TAB
-Tabs.ObjectGrab:AddSection("Object Grab")
+-- ============================================
+-- OBJECT GRAB TAB (COMPILAR GRUPOS AQUI!)
+-- ============================================
+Tabs.ObjectGrab:AddSection("Object Grab - Anchor & Compile")
 
 Tabs.ObjectGrab:AddToggle({
     Title = "Anchor Grab",
+    Description = "Anchors grabbed objects - they stay floating!",
     Default = false,
     Callback = function(Value)
         if Value then
             if not anchorGrabCoroutine or coroutine.status(anchorGrabCoroutine) == "dead" then
                 anchorGrabCoroutine = coroutine.create(anchorGrab)
                 coroutine.resume(anchorGrabCoroutine)
+                Fluent:Notify({Title = "Anchor Grab", Content = "ACTIVATED - Grabbed objects will be anchored!", Duration = 3})
             end
         elseif anchorGrabCoroutine then
             coroutine.close(anchorGrabCoroutine)
@@ -681,23 +939,57 @@ Tabs.ObjectGrab:AddToggle({
     end
 })
 
-Tabs.ObjectGrab:AddParagraph("Info", "If someone grabs your anchored parts, they will fall!")
+Tabs.ObjectGrab:AddParagraph("Info", "Grab objects with Anchor ON to lock them in place. Then use Compile to stick them together!")
 
 Tabs.ObjectGrab:AddButton({
-    Title = "Unanchor Parts",
+    Title = "COMPILE GROUP",
+    Description = "Stick all anchored objects together as one",
+    Callback = function()
+        compileGroup()
+    end
+})
+
+Tabs.ObjectGrab:AddButton({
+    Title = "Start Compile Coroutine",
+    Description = "Keep compiled objects moving together",
+    Callback = function()
+        if not compileCoroutine or coroutine.status(compileCoroutine) == "dead" then
+            compileCoroutine = coroutine.create(compileCoroutineFunc)
+            coroutine.resume(compileCoroutine)
+            Fluent:Notify({Title = "Compile", Content = "Coroutine started!", Duration = 2})
+        end
+    end
+})
+
+Tabs.ObjectGrab:AddButton({
+    Title = "Unanchor Header Part",
+    Description = "Unanchor the main compiled object",
+    Callback = unanchorPrimaryPart
+})
+
+Tabs.ObjectGrab:AddButton({
+    Title = "Unanchor ALL Parts",
+    Description = "Remove anchor from all grabbed objects",
     Callback = cleanupAnchoredParts
 })
 
 Tabs.ObjectGrab:AddButton({
-    Title = "Disassemble Parts",
+    Title = "Disassemble ALL Groups",
+    Description = "Destroy all compiled groups",
     Callback = function()
         cleanupCompiledGroups()
         cleanupAnchoredParts()
+        if compileCoroutine and coroutine.status(compileCoroutine) ~= "dead" then
+            coroutine.close(compileCoroutine)
+            compileCoroutine = nil
+        end
+        Fluent:Notify({Title = "Disassembled", Content = "All groups destroyed!", Duration = 2})
     end
 })
 
 Tabs.ObjectGrab:AddToggle({
     Title = "Auto Recover Dropped Parts",
+    Description = "Auto-recover anchored parts if someone grabs them",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -712,11 +1004,14 @@ Tabs.ObjectGrab:AddToggle({
     end
 })
 
+-- ============================================
 -- ANTI GRAB TAB
+-- ============================================
 Tabs.AntiGrab:AddSection("Defense System")
 
 Tabs.AntiGrab:AddToggle({
     Title = "Anti Grab",
+    Description = "Auto-break free when grabbed",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -740,6 +1035,7 @@ Tabs.AntiGrab:AddToggle({
 
 Tabs.AntiGrab:AddToggle({
     Title = "Anti Kick Grab",
+    Description = "Protect against kick grab",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -761,12 +1057,80 @@ Tabs.AntiGrab:AddToggle({
     end
 })
 
+Tabs.AntiGrab:AddToggle({
+    Title = "Anti Explosion",
+    Description = "Prevent being ragdolled by explosions",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            if localPlayer.Character then
+                setupAntiExplosion(localPlayer.Character)
+            end
+            characterAddedConn = localPlayer.CharacterAdded:Connect(setupAntiExplosion)
+        elseif antiExplosionConnection then
+            antiExplosionConnection:Disconnect()
+            antiExplosionConnection = nil
+            if characterAddedConn then
+                characterAddedConn:Disconnect()
+                characterAddedConn = nil
+            end
+        end
+    end
+})
+
+Tabs.AntiGrab:AddSection("Self Defense")
+
+Tabs.AntiGrab:AddToggle({
+    Title = "Self Defense / Air Suspend",
+    Description = "Launch attackers into the air",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            autoDefendCoroutine = coroutine.create(function()
+                while wait(0.02) do
+                    pcall(function()
+                        local character = localPlayer.Character
+                        if character and character:FindFirstChild("Head") then
+                            local head = character.Head
+                            local partOwner = head:FindFirstChild("PartOwner")
+                            if partOwner then
+                                local attacker = Players:FindFirstChild(partOwner.Value)
+                                if attacker and attacker.Character then
+                                    Struggle:FireServer()
+                                    SetNetworkOwner:FireServer(attacker.Character.Head or attacker.Character.Torso, attacker.Character.HumanoidRootPart.FirePlayerPart.CFrame)
+                                    task.wait(0.1)
+                                    local target = attacker.Character:FindFirstChild("Torso")
+                                    if target then
+                                        local velocity = target:FindFirstChild("l") or Instance.new("BodyVelocity")
+                                        velocity.Name = "l"
+                                        velocity.Parent = target
+                                        velocity.Velocity = Vector3.new(0, 50, 0)
+                                        velocity.MaxForce = Vector3.new(0, math.huge, 0)
+                                        Debris:AddItem(velocity, 100)
+                                    end
+                                end
+                            end
+                        end
+                    end)
+                end
+            end)
+            coroutine.resume(autoDefendCoroutine)
+        elseif autoDefendCoroutine then
+            coroutine.close(autoDefendCoroutine)
+            autoDefendCoroutine = nil
+        end
+    end
+})
+
+-- ============================================
 -- BLOBMAN TAB
+-- ============================================
 Tabs.Blobman:AddSection("Blobman Control")
 
 local blobmanToggle
 blobmanToggle = Tabs.Blobman:AddToggle({
     Title = "Destroy Server",
+    Description = "Make blobman grab everyone (must be mounted)",
     Default = false,
     Callback = function(Value)
         if Value then
@@ -787,6 +1151,7 @@ blobmanToggle = Tabs.Blobman:AddToggle({
                     blobmanToggle:SetValue(false)
                     return
                 end
+                Fluent:Notify({Title = "Blobman", Content = "DESTROY SERVER ACTIVATED!", Duration = 3})
                 while true do
                     for _, player in pairs(Players:GetPlayers()) do
                         if blobman and player ~= localPlayer then
@@ -801,12 +1166,14 @@ blobmanToggle = Tabs.Blobman:AddToggle({
         elseif blobmanCoroutine then
             coroutine.close(blobmanCoroutine)
             blobmanCoroutine = nil
+            Fluent:Notify({Title = "Blobman", Content = "DESTROY SERVER DEACTIVATED", Duration = 2})
         end
     end
 })
 
 Tabs.Blobman:AddSlider({
     Title = "Destroy Speed",
+    Description = "How fast blobman grabs (lower = faster)",
     Min = 0.05,
     Max = 1,
     Default = 0.5,
@@ -816,7 +1183,9 @@ Tabs.Blobman:AddSlider({
     end
 })
 
+-- ============================================
 -- FUN TAB
+-- ============================================
 Tabs.Fun:AddSection("Troll")
 
 Tabs.Fun:AddInput({
@@ -829,10 +1198,12 @@ Tabs.Fun:AddInput({
 
 Tabs.Fun:AddButton({
     Title = "Get Coin",
+    Description = "Set your coin count",
     Callback = function()
         local coinAmount = tonumber(skolko) or 0
         pcall(function()
             game.Players.LocalPlayer.PlayerGui.MenuGui.TopRight.CoinsFrame.CoinsDisplay.Coins.Text = tostring(coinAmount)
+            Fluent:Notify({Title = "Coins", Content = "Set to " .. coinAmount, Duration = 2})
         end)
     end
 })
@@ -859,6 +1230,7 @@ Tabs.Fun:AddInput({
 
 Tabs.Fun:AddButton({
     Title = "Decoy Follow",
+    Description = "Make decoys follow you or attack",
     Callback = function()
         local decoys = {}
         for _, descendant in pairs(workspace:GetDescendants()) do
@@ -868,6 +1240,20 @@ Tabs.Fun:AddButton({
         end
         local numDecoys = #decoys
         local midPoint = math.ceil(numDecoys / 2)
+        
+        local function getNearestPlayer()
+            local nearest, nearestDist = nil, math.huge
+            for _, player in pairs(Players:GetPlayers()) do
+                if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                    local dist = (playerCharacter.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = player
+                    end
+                end
+            end
+            return nearest
+        end
         
         local function updateDecoyPositions()
             for index, decoy in pairs(decoys) do
@@ -886,19 +1272,6 @@ Tabs.Fun:AddButton({
                                 targetPosition = targetPosition - forward * decoyOffset + right * offset
                             end
                         else
-                            local function getNearestPlayer()
-                                local nearest, nearestDist = nil, math.huge
-                                for _, player in pairs(Players:GetPlayers()) do
-                                    if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                                        local dist = (playerCharacter.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude
-                                        if dist < nearestDist then
-                                            nearestDist = dist
-                                            nearest = player
-                                        end
-                                    end
-                                end
-                                return nearest
-                            end
                             local nearestPlayer = getNearestPlayer()
                             if nearestPlayer and nearestPlayer.Character and nearestPlayer.Character:FindFirstChild("HumanoidRootPart") then
                                 local angle = math.rad((index - 1) * (360 / numDecoys))
@@ -938,26 +1311,35 @@ Tabs.Fun:AddButton({
         for _, decoy in pairs(decoys) do
             setupDecoy(decoy)
         end
-        Fluent:Notify({Title = "Notification", Content = "Got "..numDecoys.." units", Duration = 5})
+        Fluent:Notify({Title = "Decoy", Content = "Got " .. numDecoys .. " units", Duration = 3})
     end
 })
 
 Tabs.Fun:AddButton({
     Title = "Toggle Mode (Follow/Attack)",
+    Description = "Switch between follow me or attack enemies",
     Callback = function()
         followMode = not followMode
+        local mode = followMode and "FOLLOW MODE" or "ATTACK MODE"
+        Fluent:Notify({Title = "Decoy Mode", Content = mode, Duration = 2})
     end
 })
 
 Tabs.Fun:AddButton({
     Title = "Disconnect Clones",
+    Description = "Remove all decoy connections",
     Callback = function()
         cleanupConnections(connections)
+        Fluent:Notify({Title = "Decoy", Content = "Clones disconnected!", Duration = 2})
     end
 })
 
+-- ============================================
 -- SCRIPTS TAB
+-- ============================================
 Tabs.Scripts:AddSection("Script Executor")
+
+local currentScriptCode = ""
 
 Tabs.Scripts:AddInput({
     Title = "Paste Script",
@@ -969,6 +1351,7 @@ Tabs.Scripts:AddInput({
 
 Tabs.Scripts:AddButton({
     Title = "Execute Script",
+    Description = "Run the pasted script",
     Callback = function()
         if currentScriptCode and currentScriptCode ~= "" then
             local success, err = pcall(function()
@@ -1026,6 +1409,7 @@ Tabs.Scripts:AddInput({
 
 Tabs.Scripts:AddButton({
     Title = "Save Current Script",
+    Description = "Save pasted script with custom name",
     Callback = function()
         if currentScriptName and currentScriptName ~= "" and currentScriptCode and currentScriptCode ~= "" then
             savedScripts[currentScriptName] = currentScriptCode
@@ -1044,5 +1428,7 @@ Tabs.Scripts:AddButton({
 })
 
 -- FINALIZAR
-Fluent:Notify({Title = "Hexer_hub", Content = "Loaded! Credits: Nydev and LeoLeoVip", Duration = 5})
+Fluent:Notify({Title = "Hexer_hub", Content = "Loaded! SUPER STRENGTH ACTIVE? Toggle in Combat tab!", Duration = 5})
 print("[Hexer_hub] Carregado com sucesso! Creditos: Nydev and LeoLeoVip")
+print("[Hexer_hub] SUPER STRENGTH: Ative no menu Combat -> SUPER STRENGTH (ACTIVE)")
+print("[Hexer_hub] Depois de agarrar algo/player, segure BOTÃO DIREITO para lançar!")
