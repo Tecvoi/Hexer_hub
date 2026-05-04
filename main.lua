@@ -1,7 +1,7 @@
 -- Hexer Hub - Ultimate Exploit Script for Fling Things and People
 -- Created by GitHub Copilot
 -- Owners: Replace with actual UserIds or Names
-local Owners = {123456789, 987654321} -- Example UserIds
+local Owners = {4406877492, 2962384943} -- Example UserIds
 -- Admins: Replace with actual UserIds or Names
 local Admins = {111111111, 222222222, 333333333, 444444444, 555555555} -- Example UserIds
 
@@ -17,46 +17,52 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 
--- Orion Library Load
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Window = OrionLib:MakeWindow({Name = "Hexer Hub - Ultimate Exploit", HidePremium = false, SaveConfig = true, ConfigFolder = "HexerHub"})
+-- Rayfield Library Load
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Window = Rayfield:CreateWindow({
+    Name = "Hexer Hub - Ultimate Exploit",
+    LoadingTitle = "Loading Hexer Hub...",
+    LoadingSubtitle = "by GitHub Copilot",
+    ConfigurationSaving = {
+        Enabled = true,
+        FolderName = "HexerHub",
+        FileName = "Config"
+    },
+    Discord = {
+        Enabled = false,
+        Invite = "",
+        RememberJoins = true
+    },
+    KeySystem = false,
+    KeySettings = {
+        Title = "Hexer Hub",
+        Subtitle = "Key System",
+        Note = "No key required",
+        FileName = "Key",
+        SaveKey = true,
+        GrabKeyFromSite = false,
+        Key = {"Hello"}
+    }
+})
 
 -- Tabs
-local MainTab = Window:MakeTab({
-    Name = "Main",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local MainTab = Window:CreateTab("Main", 4483345998)
+local MainSection = MainTab:CreateSection("Main Features")
 
-local CombatTab = Window:MakeTab({
-    Name = "Combat",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local CombatTab = Window:CreateTab("Combat", 4483345998)
+local CombatSection = CombatTab:CreateSection("Combat Features")
 
-local MovementTab = Window:MakeTab({
-    Name = "Movement",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local MovementTab = Window:CreateTab("Movement", 4483345998)
+local MovementSection = MovementTab:CreateSection("Movement Settings")
 
-local GrabTab = Window:MakeTab({
-    Name = "Grab",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local GrabTab = Window:CreateTab("Grab", 4483345998)
+local GrabSection = GrabTab:CreateSection("Grab Enhancements")
 
-local AdminTab = Window:MakeTab({
-    Name = "Admin",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local AdminTab = Window:CreateTab("Admin", 4483345998)
+local AdminSection = AdminTab:CreateSection("Admin Commands")
 
-local MiscTab = Window:MakeTab({
-    Name = "Misc",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+local MiscTab = Window:CreateTab("Misc", 4483345998)
+local MiscSection = MiscTab:CreateSection("Miscellaneous")
 
 -- Functions
 local function IsOwner(player)
@@ -81,11 +87,11 @@ local function IsBanned(player)
 end
 
 if IsBanned(LocalPlayer) then
-    OrionLib:MakeNotification({
-        Name = "Banned",
+    Rayfield:Notify({
+        Title = "Banned",
         Content = "You are banned from using Hexer Hub.",
-        Image = "rbxassetid://4483345998",
-        Time = 5
+        Duration = 5,
+        Image = 4483345998,
     })
     return
 end
@@ -165,21 +171,21 @@ end
 MakeImmune()
 
 -- Main Features
-MainTab:AddButton({
+MainSection:CreateButton({
     Name = "God Mode",
     Callback = function()
         Humanoid.Health = math.huge
         Humanoid.MaxHealth = math.huge
-        OrionLib:MakeNotification({
-            Name = "Activated",
+        Rayfield:Notify({
+            Title = "Activated",
             Content = "God Mode enabled!",
-            Image = "rbxassetid://4483345998",
-            Time = 3
+            Duration = 3,
+            Image = 4483345998,
         })
     end
 })
 
-MainTab:AddButton({
+MainSection:CreateButton({
     Name = "Infinite Jump",
     Callback = function()
         local infJump = true
@@ -188,17 +194,17 @@ MainTab:AddButton({
                 Humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
             end
         end)
-        OrionLib:MakeNotification({
-            Name = "Activated",
+        Rayfield:Notify({
+            Title = "Activated",
             Content = "Infinite Jump enabled!",
-            Image = "rbxassetid://4483345998",
-            Time = 3
+            Duration = 3,
+            Image = 4483345998,
         })
     end
 })
 
 -- Combat Tab
-CombatTab:AddButton({
+CombatSection:CreateButton({
     Name = "Kill All",
     Callback = function()
         for _, player in pairs(Players:GetPlayers()) do
@@ -213,27 +219,25 @@ CombatTab:AddButton({
 })
 
 -- Movement Tab
-MovementTab:AddSlider({
+MovementSection:CreateSlider({
     Name = "WalkSpeed",
-    Min = 16,
-    Max = 500,
-    Default = 16,
-    Color = Color3.fromRGB(255,255,255),
+    Range = {16, 500},
     Increment = 1,
-    ValueName = "Speed",
+    Suffix = "Speed",
+    CurrentValue = 16,
+    Flag = "WalkSpeed",
     Callback = function(value)
         Humanoid.WalkSpeed = value
     end
 })
 
-MovementTab:AddSlider({
+MovementSection:CreateSlider({
     Name = "JumpPower",
-    Min = 50,
-    Max = 500,
-    Default = 50,
-    Color = Color3.fromRGB(255,255,255),
+    Range = {50, 500},
     Increment = 1,
-    ValueName = "Power",
+    Suffix = "Power",
+    CurrentValue = 50,
+    Flag = "JumpPower",
     Callback = function(value)
         Humanoid.JumpPower = value
     end
@@ -241,9 +245,10 @@ MovementTab:AddSlider({
 
 -- Grab Tab (Enhanced Grabbing)
 local GrabEnabled = false
-GrabTab:AddToggle({
+GrabSection:CreateToggle({
     Name = "Infinite Grab Distance",
-    Default = false,
+    CurrentValue = false,
+    Flag = "InfiniteGrab",
     Callback = function(value)
         GrabEnabled = value
         if value then
@@ -255,7 +260,7 @@ GrabTab:AddToggle({
     end
 })
 
-GrabTab:AddButton({
+GrabSection:CreateButton({
     Name = "Throw All",
     Callback = function()
         for _, player in pairs(Players:GetPlayers()) do
@@ -273,17 +278,17 @@ GrabTab:AddButton({
 })
 
 -- Admin Tab
-AdminTab:AddTextbox({
+AdminSection:CreateInput({
     Name = "Command Input",
-    Default = "",
-    TextDisappear = true,
+    PlaceholderText = "Enter command (e.g., :kill username)",
+    RemoveTextAfterFocusLost = true,
     Callback = function(value)
         LocalPlayer:Chat(value) -- Simulate chat for commands
     end
 })
 
 -- Misc Tab
-MiscTab:AddButton({
+MiscSection:CreateButton({
     Name = "Disable Core GUI",
     Callback = function()
         local StarterGui = game:GetService("StarterGui")
@@ -293,7 +298,7 @@ MiscTab:AddButton({
     end
 })
 
-MiscTab:AddButton({
+MiscSection:CreateButton({
     Name = "Spawn Poison Balls",
     Callback = function()
         -- From PoisonBallSpawner
@@ -310,9 +315,10 @@ MiscTab:AddButton({
 })
 
 -- Ragdoll Toggle
-MiscTab:AddToggle({
+MiscSection:CreateToggle({
     Name = "Ragdoll Mode",
-    Default = false,
+    CurrentValue = false,
+    Flag = "Ragdoll",
     Callback = function(value)
         if value then
             Humanoid:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
@@ -324,9 +330,10 @@ MiscTab:AddToggle({
 })
 
 -- Crouch Toggle
-MiscTab:AddToggle({
+MiscSection:CreateToggle({
     Name = "Crouch",
-    Default = false,
+    CurrentValue = false,
+    Flag = "Crouch",
     Callback = function(value)
         if value then
             Humanoid.HipHeight = -1.5 -- Crouch
@@ -338,9 +345,10 @@ MiscTab:AddToggle({
 
 -- Bobbing Effect
 local BobbingEnabled = false
-MiscTab:AddToggle({
+MiscSection:CreateToggle({
     Name = "Bobbing Effect",
-    Default = false,
+    CurrentValue = false,
+    Flag = "Bobbing",
     Callback = function(value)
         BobbingEnabled = value
         if value then
@@ -354,7 +362,7 @@ MiscTab:AddToggle({
 })
 
 -- Explosion Maker
-MiscTab:AddButton({
+MiscSection:CreateButton({
     Name = "Explode All",
     Callback = function()
         local ExplosionMaker = require(ReplicatedStorage.ExplosionMaker)
@@ -367,7 +375,7 @@ MiscTab:AddButton({
 })
 
 -- Food Module
-MiscTab:AddButton({
+MiscSection:CreateButton({
     Name = "Cook All Food",
     Callback = function()
         local Food = require(ReplicatedStorage.Food)
@@ -389,6 +397,3 @@ RunService.Heartbeat:Connect(function()
         end
     end
 end)
-
--- UI Finalize
-OrionLib:Init()
