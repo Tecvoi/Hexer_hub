@@ -1,40 +1,69 @@
---[[
-    OrionLib Version - Fling Things and People
-    Key: HexerLopper
-]]
+-- ============================================
+-- HEXER_HUB - Fling Things and People
+-- Credits: Nydev and LeoLeoVip
+-- ============================================
 
-local OrionLib = loadstring(game:HttpGet(('https://raw.githubusercontent.com/shlexware/Orion/main/source')))()
-local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local Debris = game:GetService("Debris")
-local localPlayer = Players.LocalPlayer
 
--- Key System
-local Window = OrionLib:MakeWindow({
-    Name = "LeoLeoHub - FTAP",
-    HidePremium = false,
-    SaveConfig = true,
-    ConfigFolder = "LeoLeoHub",
-    IntroEnabled = true,
-    IntroText = "HexerLopper",
-    IntroIcon = "rbxassetid://4483362458"
-})
+-- ============================================
+-- AJUSTE DE TELA PARA RESOLUÇÕES ALTAS (1440p/4K)
+-- ============================================
+local camera = workspace.CurrentCamera
+local screenSize = camera.ViewportSize
+local screenWidth = screenSize.X
+local screenHeight = screenSize.Y
 
-local KeySystem = OrionLib:MakeKey({
-    Name = "LeoLeoHub Key System",
-    Key = "HexerLopper",
-    Note = "Enter the key to access the script",
-    Save = true
-})
+local scaleFactor = 1
+local windowWidth = 600
+local windowHeight = 500
 
-if not KeySystem then
-    return
+-- PC com tela grande (1440p ou maior)
+if screenWidth >= 2500 or screenHeight >= 1400 then
+    scaleFactor = 1.8
+    windowWidth = 1100
+    windowHeight = 900
+elseif screenWidth >= 1900 then
+    scaleFactor = 1.4
+    windowWidth = 850
+    windowHeight = 700
+elseif screenWidth <= 800 then
+    scaleFactor = 0.8
+    windowWidth = 480
+    windowHeight = 400
 end
 
--- Variables
+print("[Hexer_hub] Resolução: " .. screenWidth .. "x" .. screenHeight .. " | Escala: " .. scaleFactor .. "x")
+print("[Hexer_hub] Creditos: Nydev and LeoLeoVip")
+
+-- Carregar Rayfield com correção de tamanho
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+-- CORREÇÃO PARA MOUSE WHEEL E BOTÕES (PC)
+UserInputService.MouseWheelBackward:Connect(function()
+    pcall(function()
+        for _, frame in pairs(game.CoreGui:GetDescendants()) do
+            if frame:IsA("ScrollingFrame") and frame.Visible then
+                frame.CanvasPosition = Vector2.new(frame.CanvasPosition.X, frame.CanvasPosition.Y + 40)
+            end
+        end
+    end)
+end)
+
+UserInputService.MouseWheelForward:Connect(function()
+    pcall(function()
+        for _, frame in pairs(game.CoreGui:GetDescendants()) do
+            if frame:IsA("ScrollingFrame") and frame.Visible then
+                frame.CanvasPosition = Vector2.new(frame.CanvasPosition.X, frame.CanvasPosition.Y - 40)
+            end
+        end
+    end)
+end)
+
 local GrabEvents = ReplicatedStorage:WaitForChild("GrabEvents")
 local MenuToys = ReplicatedStorage:WaitForChild("MenuToys")
 local CharacterEvents = ReplicatedStorage:WaitForChild("CharacterEvents")
@@ -43,14 +72,15 @@ local Struggle = CharacterEvents:WaitForChild("Struggle")
 local CreateLine = GrabEvents:WaitForChild("CreateGrabLine")
 local DestroyLine = GrabEvents:WaitForChild("DestroyGrabLine")
 local DestroyToy = MenuToys:WaitForChild("DestroyToy")
-
+local localPlayer = Players.LocalPlayer
 local playerCharacter = localPlayer.Character or localPlayer.CharacterAdded:Wait()
 localPlayer.CharacterAdded:Connect(function(character)
     playerCharacter = character
 end)
 
--- Variables for features
+-- Variáveis
 local AutoRecoverDroppedPartsCoroutine
+local connectionBombReload
 local reloadBombCoroutine
 local antiExplosionConnection
 local poisonAuraCoroutine
@@ -107,6 +137,9 @@ local lightbit = 0.3125
 local lightbitoffset = 1
 local lightbitradius = 20
 local usingradius = lightbitradius
+local Player = game.Players.LocalPlayer
+local U = loadstring(game:HttpGet("https://paste.ee/r/7X7NLEPB", true))()
+
 local followMode = true
 local toysFolder = workspace:FindFirstChild(localPlayer.Name.."SpawnedInToys")
 local playerList = {}
@@ -115,13 +148,11 @@ local blobman
 local platforms = {}
 local ownedToys = {}
 local bombList = {}
-
 _G.ToyToLoad = "BombMissile"
 _G.MaxMissiles = 9
 _G.BlobmanDelay = 0.005
-_G.strength = 400
 
--- Helper functions
+-- Funções auxiliares
 local function isDescendantOf(target, other)
     local currentParent = target.Parent
     while currentParent do
@@ -204,17 +235,23 @@ local function cleanupConnections(connectionTable)
     connectionTable = {}
 end
 
+local function getVersion()
+    local url = "https://raw.githubusercontent.com/Undebolted/FTAP/main/VERSION.json"
+    local success, response = pcall(function()
+        return game:HttpGet(url)
+    end)
+    if success then
+        local data = HttpService:JSONDecode(response)
+        return data.version
+    else
+        return "Unknown"
+    end
+end
+
 local function spawnItem(itemName, position, orientation)
     task.spawn(function()
         local cframe = CFrame.new(position)
         local rotation = Vector3.new(0, 90, 0)
-        ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(itemName, cframe, rotation)
-    end)
-end
-
-local function spawnItemCf(itemName, cframe)
-    task.spawn(function()
-        local rotation = Vector3.new(0, 0, 0)
         ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(itemName, cframe, rotation)
     end)
 end
@@ -231,46 +268,34 @@ local function arson(part)
     burnPart.Position = Vector3.new(0, -50, 0)
 end
 
-local function createHighlight(parent)
-    local highlight = Instance.new("Highlight")
-    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
-    highlight.FillTransparency = 1
-    highlight.Name = "Highlight"
-    highlight.OutlineColor = Color3.new(0, 0, 1)
-    highlight.OutlineTransparency = 0.5
-    highlight.Parent = parent
-    return highlight
+local function handleCharacterAdded(player)
+    local characterAddedConnection = player.CharacterAdded:Connect(function(character)
+        local hrp = character:WaitForChild("HumanoidRootPart")
+        local fpp = hrp:WaitForChild("FirePlayerPart")
+        fpp.Size = Vector3.new(4.5, 5, 4.5)
+        fpp.CollisionGroup = "1"
+        fpp.CanQuery = true
+    end)
+    table.insert(kickGrabConnections, characterAddedConnection)
 end
 
-local function onPartOwnerAdded(descendant, primaryPart)
-    if descendant.Name == "PartOwner" and descendant.Value ~= localPlayer.Name then
-        local highlight = primaryPart:FindFirstChild("Highlight") or U.GetDescendant(U.FindFirstAncestorOfType(primaryPart, "Model"), "Highlight", "Highlight")
-        if highlight then
-            if descendant.Value ~= localPlayer.Name then
-                highlight.OutlineColor = Color3.new(1, 0, 0)
-            else
-                highlight.OutlineColor = Color3.new(0, 0, 1)
+local function kickGrab()
+    for _, player in pairs(Players:GetPlayers()) do
+        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+            local hrp = player.Character.HumanoidRootPart
+            if hrp:FindFirstChild("FirePlayerPart") then
+                local fpp = hrp.FirePlayerPart
+                fpp.Size = Vector3.new(4.5, 5.5, 4.5)
+                fpp.CollisionGroup = "1"
+                fpp.CanQuery = true
             end
         end
+        handleCharacterAdded(player)
     end
+    local playerAddedConnection = Players.PlayerAdded:Connect(handleCharacterAdded)
+    table.insert(kickGrabConnections, playerAddedConnection)
 end
 
-local function createBodyMovers(part, position, rotation)
-    local bodyPosition = Instance.new("BodyPosition")
-    local bodyGyro = Instance.new("BodyGyro")
-    bodyPosition.P = 15000
-    bodyPosition.D = 200
-    bodyPosition.MaxForce = Vector3.new(5000000, 5000000, 5000000)
-    bodyPosition.Position = position
-    bodyPosition.Parent = part
-    bodyGyro.P = 15000
-    bodyGyro.D = 200
-    bodyGyro.MaxTorque = Vector3.new(5000000, 5000000, 5000000)
-    bodyGyro.CFrame = rotation
-    bodyGyro.Parent = part
-end
-
--- Main feature functions
 local function grabHandler(grabType)
     while true do
         pcall(function()
@@ -348,6 +373,13 @@ local function noclipGrab()
     end
 end
 
+local function spawnItemCf(itemName, cframe)
+    task.spawn(function()
+        local rotation = Vector3.new(0, 0, 0)
+        ReplicatedStorage.MenuToys.SpawnToyRemoteFunction:InvokeServer(itemName, cframe, rotation)
+    end)
+end
+
 local function fireAll()
     while true do
         pcall(function()
@@ -391,6 +423,45 @@ local function fireAll()
     end
 end
 
+local function createHighlight(parent)
+    local highlight = Instance.new("Highlight")
+    highlight.DepthMode = Enum.HighlightDepthMode.Occluded
+    highlight.FillTransparency = 1
+    highlight.Name = "Highlight"
+    highlight.OutlineColor = Color3.new(0, 0, 1)
+    highlight.OutlineTransparency = 0.5
+    highlight.Parent = parent
+    return highlight
+end
+
+local function onPartOwnerAdded(descendant, primaryPart)
+    if descendant.Name == "PartOwner" and descendant.Value ~= localPlayer.Name then
+        local highlight = primaryPart:FindFirstChild("Highlight") or U.GetDescendant(U.FindFirstAncestorOfType(primaryPart, "Model"), "Highlight", "Highlight")
+        if highlight then
+            if descendant.Value ~= localPlayer.Name then
+                highlight.OutlineColor = Color3.new(1, 0, 0)
+            else
+                highlight.OutlineColor = Color3.new(0, 0, 1)
+            end
+        end
+    end
+end
+
+local function createBodyMovers(part, position, rotation)
+    local bodyPosition = Instance.new("BodyPosition")
+    local bodyGyro = Instance.new("BodyGyro")
+    bodyPosition.P = 15000
+    bodyPosition.D = 200
+    bodyPosition.MaxForce = Vector3.new(5000000, 5000000, 5000000)
+    bodyPosition.Position = position
+    bodyPosition.Parent = part
+    bodyGyro.P = 15000
+    bodyGyro.D = 200
+    bodyGyro.MaxTorque = Vector3.new(5000000, 5000000, 5000000)
+    bodyGyro.CFrame = rotation
+    bodyGyro.Parent = part
+end
+
 local function anchorGrab()
     while true do
         pcall(function()
@@ -415,8 +486,8 @@ local function anchorGrab()
             end
             if t and not table.find(anchoredParts, primaryPart) then
                 local target 
-                if primaryPart.Parent and primaryPart.Parent:IsA("Model") and primaryPart.Parent ~= workspace then
-                    target = primaryPart.Parent
+                if U.FindFirstAncestorOfType(primaryPart, "Model") and U.FindFirstAncestorOfType(primaryPart, "Model") ~= workspace then
+                    target = U.FindFirstAncestorOfType(primaryPart, "Model")
                 else
                     target = primaryPart
                 end
@@ -427,8 +498,8 @@ local function anchorGrab()
                 end)
                 table.insert(anchoredConnections, connection)
             end
-            if primaryPart.Parent and primaryPart.Parent:IsA("Model") and primaryPart.Parent ~= workspace then 
-                for _, child in ipairs(primaryPart.Parent:GetDescendants()) do
+            if U.FindFirstAncestorOfType(primaryPart, "Model") and U.FindFirstAncestorOfType(primaryPart, "Model") ~= workspace then 
+                for _, child in ipairs(U.FindFirstAncestorOfType(primaryPart, "Model"):GetDescendants()) do
                     if child:IsA("BodyPosition") or child:IsA("BodyGyro") then
                         child:Destroy()
                     end
@@ -485,7 +556,7 @@ local function cleanupAnchoredParts()
             if part:FindFirstChild("BodyGyro") then
                 part.BodyGyro:Destroy()
             end
-            local highlight = part:FindFirstChild("Highlight") or (part.Parent and part.Parent:FindFirstChild("Highlight"))
+            local highlight = part:FindFirstChild("Highlight") or part.Parent and part.Parent:FindFirstChild("Highlight")
             if highlight then
                 highlight:Destroy()
             end
@@ -514,13 +585,13 @@ end
 
 local function compileGroup()
     if #anchoredParts == 0 then 
-        OrionLib:MakeNotification({Name = "Error", Content = "No anchored parts found", Time = 5})
+        Rayfield:Notify({Title = "Error", Content = "No anchored parts found", Duration = 5})
     else
-        OrionLib:MakeNotification({Name = "Success", Content = "Compiled "..#anchoredParts.." Toys together", Time = 5})
+        Rayfield:Notify({Title = "Success", Content = "Compiled "..#anchoredParts.." Toys together", Duration = 5})
     end
     local primaryPart = anchoredParts[1]
     if not primaryPart then return end
-    local highlight = primaryPart:FindFirstChild("Highlight") or (primaryPart.Parent and primaryPart.Parent:FindFirstChild("Highlight"))
+    local highlight = primaryPart:FindFirstChild("Highlight") or primaryPart.Parent:FindFirstChild("Highlight")
     if not highlight then
         highlight = createHighlight(primaryPart.Parent:IsA("Model") and primaryPart.Parent or primaryPart)
     end
@@ -605,7 +676,7 @@ local function recoverParts()
                         if partModel then
                             local distance = (partModel.Position - humanoidRootPart.Position).Magnitude
                             if distance <= 30 then
-                                local highlight = partModel:FindFirstChild("Highlight") or (partModel.Parent and partModel.Parent:FindFirstChild("Highlight"))
+                                local highlight = partModel:FindFirstChild("Highlight") or partModel.Parent:FindFirstChild("Highlight")
                                 if highlight and highlight.OutlineColor == Color3.new(1, 0, 0) then
                                     SetNetworkOwner:FireServer(partModel, partModel.CFrame)
                                     if partModel:WaitForChild("PartOwner") and partModel.PartOwner.Value == localPlayer.Name then
@@ -706,107 +777,84 @@ local function blobGrabPlayer(player, blobman)
     end
 end
 
-local function kickGrab()
-    for _, player in pairs(Players:GetPlayers()) do
-        if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local hrp = player.Character.HumanoidRootPart
-            if hrp:FindFirstChild("FirePlayerPart") then
-                local fpp = hrp.FirePlayerPart
-                fpp.Size = Vector3.new(4.5, 5.5, 4.5)
-                fpp.CollisionGroup = "1"
-                fpp.CanQuery = true
-            end
-        end
+local version = getVersion()
+local localVersion = "8.2-stable"
+
+-- Criar a Window com tamanho ajustado
+local Window = Rayfield:CreateWindow({
+    Name = "Hexer_hub",
+    Icon = 0, 
+    LoadingTitle = "Hexer_hub Loaded",
+    LoadingSubtitle = "by Nydev and LeoLeoVip",
+    Theme = "Default", 
+    DisableRayfieldPrompts = false,
+    DisableBuildWarnings = false, 
+    ConfigurationSaving = {
+       Enabled = true,
+       FolderName = "Hexer_hub", 
+       FileName = "Hexer_hub"
+    },
+    Discord = {
+       Enabled = true, 
+       Invite = "KtYXs9yh", 
+       RememberJoins = true 
+    },
+    KeySystem = false, 
+})
+
+-- FORÇAR TAMANHO DA JANELA BASEADO NA RESOLUÇÃO
+pcall(function()
+    local mainFrame = Window.WindowFrame
+    if mainFrame then
+        mainFrame.Size = UDim2.new(0, windowWidth, 0, windowHeight)
+        mainFrame.Position = UDim2.new(0.5, -windowWidth/2, 0.5, -windowHeight/2)
     end
-    local function handleCharacterAdded(player)
-        local characterAddedConnection = player.CharacterAdded:Connect(function(character)
-            local hrp = character:WaitForChild("HumanoidRootPart")
-            local fpp = hrp:WaitForChild("FirePlayerPart")
-            fpp.Size = Vector3.new(4.5, 5, 4.5)
-            fpp.CollisionGroup = "1"
-            fpp.CanQuery = true
-        end)
-        table.insert(kickGrabConnections, characterAddedConnection)
-    end
-    for _, player in pairs(Players:GetPlayers()) do
-        handleCharacterAdded(player)
-    end
-    local playerAddedConnection = Players.PlayerAdded:Connect(handleCharacterAdded)
-    table.insert(kickGrabConnections, playerAddedConnection)
-end
+end)
 
--- Create Tabs
-local homeTab = OrionLib:MakeTab({
-    Name = "Home",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+-- Criar Tabs
+local homeTab = Window:CreateTab("Home", 10723407389)
+local GrabTab = Window:CreateTab("Combat", 10723404472)
+local PlayerTab = Window:CreateTab("Local Player", 10747373176)
+local ObjectGrabTab = Window:CreateTab("Object Grab", 10709782497) 
+local DefanseTab = Window:CreateTab("Anti Grab", 10734951847)
+local BlobmanTab = Window:CreateTab("Blob Man", 10709782230)
+local FunTab = Window:CreateTab("Fun / Troll", 10734964441)
+local ScriptTab = Window:CreateTab("Script", 10734943448)
+local SavedScriptsTab = Window:CreateTab("Saved Scripts", 10734943448) 
 
-local combatTab = OrionLib:MakeTab({
-    Name = "Combat",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
+-- HOME TAB
+local Paragraph = homeTab:CreateParagraph({Title = "Hexer_hub", Content = "Credits: Nydev and LeoLeoVip"})
+local Divider = homeTab:CreateDivider()
+local Paragraph = homeTab:CreateParagraph({Title = "Welcome!", Content = "Welcome to Hexer_hub! "..Player.Name.." | Screen: "..screenWidth.."x"..screenHeight})
 
-local localPlayerTab = OrionLib:MakeTab({
-    Name = "Local Player",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local objectGrabTab = OrionLib:MakeTab({
-    Name = "Object Grab",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local antiGrabTab = OrionLib:MakeTab({
-    Name = "Anti Grab",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local blobmanTab = OrionLib:MakeTab({
-    Name = "Blob Man",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
-local funTab = OrionLib:MakeTab({
-    Name = "Fun / Troll",
-    Icon = "rbxassetid://4483345998",
-    PremiumOnly = false
-})
-
--- Home Tab
-homeTab:AddParagraph("LeoLeoHub - FTAP", "Welcome " .. localPlayer.Name .. "!\nKey: HexerLopper")
-homeTab:AddButton({
+local Button = homeTab:CreateButton({
     Name = "Join Discord",
     Callback = function()
         setclipboard("discord.gg/KtYXs9yh")
-        OrionLib:MakeNotification({Name = "Discord", Content = "Link copied to clipboard!", Time = 3})
-    end
+        Rayfield:Notify({Title = "Discord", Content = "Link copied!", Duration = 3})
+    end,
 })
 
--- Combat Tab
-combatTab:AddParagraph("Combat Settings", "Adjust the throwing force along the slider")
+-- COMBAT TAB
+_G.strength = 400
+local Paragraph = GrabTab:CreateParagraph({Title = "Combat Tab", Content = "Adjust the throwing force along the slider"})
 
-combatTab:AddSlider({
+local Slider = GrabTab:CreateSlider({
     Name = "Strength Power",
-    Min = 300,
-    Max = 10000,
-    Default = 300,
-    Color = Color3.fromRGB(255, 255, 255),
+    Range = {300, 10000},
     Increment = 1,
-    ValueName = "Power",
+    Suffix = "",
+    CurrentValue = 300,
+    Flag = "StrengthSlider", 
     Callback = function(Value)
         _G.strength = Value
-    end
+    end,
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Strength",
-    Default = false,
+    CurrentValue = false,
+    Flag = "StrengthToggle",
     Callback = function(enabled)
         if enabled then
             strengthConnection = workspace.ChildAdded:Connect(function(model)
@@ -834,11 +882,12 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddParagraph("Grab Effects", "These effects apply when you grab someone")
+local Paragraph = GrabTab:CreateParagraph({Title = "Grab Effects", Content = "These effects apply when you grab someone"})
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Poison Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "", 
     Callback = function(enabled)
         if enabled then
             poisonGrabCoroutine = coroutine.create(function() grabHandler("poison") end)
@@ -855,9 +904,10 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Radioactive Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "RadioactiveGrab", 
     Callback = function(enabled)
         if enabled then
             ufoGrabCoroutine = coroutine.create(function() grabHandler("radioactive") end)
@@ -874,9 +924,10 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Fire Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "FireGrab", 
     Callback = function(enabled)
         if enabled then
             fireGrabCoroutine = coroutine.create(fireGrab)
@@ -890,9 +941,10 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Noclip Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "NoclipGrab", 
     Callback = function(enabled)
         if enabled then
             noclipGrabCoroutine = coroutine.create(noclipGrab)
@@ -906,9 +958,10 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Kick Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "KickGrab", 
     Callback = function(enabled)
         if enabled then
             kickGrab()
@@ -932,9 +985,10 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Kick Grab Anchor",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AnchorKickGrab", 
     Callback = function(enabled)
         if enabled then
             if not anchorKickCoroutine or coroutine.status(anchorKickCoroutine) == "dead" then
@@ -950,11 +1004,12 @@ combatTab:AddToggle({
     end
 })
 
-combatTab:AddParagraph("All-Features", "Make sure there are no campfires spawned by you BEFORE using this")
+local Paragraph = GrabTab:CreateParagraph({Title = "All-Features", Content = "Make sure there are no campfires spawned by you BEFORE using this"})
 
-combatTab:AddToggle({
+local Toggle = GrabTab:CreateToggle({
     Name = "Fire All",
-    Default = false,
+    CurrentValue = false,
+    Flag = "FireAll", 
     Callback = function(enabled)
         if enabled then
             fireAllCoroutine = coroutine.create(fireAll)
@@ -968,12 +1023,13 @@ combatTab:AddToggle({
     end
 })
 
--- Local Player Tab
-localPlayerTab:AddParagraph("Local Player Settings", "Adjust your character stats")
+-- LOCAL PLAYER TAB
+local Paragraph = PlayerTab:CreateParagraph({Title = "Local Player Tab", Content = "Player Settings"})
 
-localPlayerTab:AddToggle({
+local Toggle = PlayerTab:CreateToggle({
     Name = "Force Custom Speed",
-    Default = false,
+    CurrentValue = false,
+    Flag = "CrouchSpeed", 
     Callback = function(enabled)
         if enabled then
             crouchSpeedCoroutine = coroutine.create(function()
@@ -996,22 +1052,22 @@ localPlayerTab:AddToggle({
     end
 })
 
-localPlayerTab:AddSlider({
+local Slider = PlayerTab:CreateSlider({
     Name = "Set Speed Value",
-    Min = 6,
-    Max = 1000,
-    Default = 50,
-    Color = Color3.fromRGB(255, 255, 255),
+    Range = {6, 1000},
     Increment = 1,
-    ValueName = "Speed",
+    Suffix = "Speed",
+    CurrentValue = 50,
+    Flag = "SpeedSlider", 
     Callback = function(Value)
         crouchWalkSpeed = Value
     end
 })
 
-localPlayerTab:AddToggle({
+local Toggle = PlayerTab:CreateToggle({
     Name = "Force Custom Jump Power",
-    Default = false,
+    CurrentValue = false,
+    Flag = "CrouchJumpPower", 
     Callback = function(enabled)
         if enabled then
             crouchJumpCoroutine = coroutine.create(function()
@@ -1035,25 +1091,25 @@ localPlayerTab:AddToggle({
     end
 })
 
-localPlayerTab:AddSlider({
+local Slider = PlayerTab:CreateSlider({
     Name = "Set Jump Power",
-    Min = 6,
-    Max = 1000,
-    Default = 50,
-    Color = Color3.fromRGB(255, 255, 255),
+    Range = {6, 1000},
     Increment = 1,
-    ValueName = "JumpPower",
+    Suffix = "JumpPower",
+    CurrentValue = 50,
+    Flag = "JumpSlider", 
     Callback = function(Value)
         crouchJumpPower = Value
     end
 })
 
--- Object Grab Tab
-objectGrabTab:AddParagraph("Object Grab", "Functions when grabbing an object")
+-- OBJECT GRAB TAB
+local Paragraph = ObjectGrabTab:CreateParagraph({Title = "Object Grab", Content = "Functions when grabbing an object"})
 
-objectGrabTab:AddToggle({
+local Toggle = ObjectGrabTab:CreateToggle({
     Name = "Anchor Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AnchorGrab", 
     Callback = function(enabled)
         if enabled then
             if not anchorGrabCoroutine or coroutine.status(anchorGrabCoroutine) == "dead" then
@@ -1069,14 +1125,14 @@ objectGrabTab:AddToggle({
     end
 })
 
-objectGrabTab:AddParagraph("Anchor Grab Info", "If someone grabs your anchored parts, they will fall and you will need to position them again!")
+local Paragraph = ObjectGrabTab:CreateParagraph({Title = "Anchor Grab Info", Content = "If someone grabs your anchored parts, they will fall!"})
 
-objectGrabTab:AddButton({
+local Button = ObjectGrabTab:CreateButton({
     Name = "Unanchor parts",
     Callback = cleanupAnchoredParts
 })
 
-objectGrabTab:AddButton({
+local Button = ObjectGrabTab:CreateButton({
     Name = "Disassemble Parts",
     Callback = function()
         cleanupCompiledGroups()
@@ -1088,9 +1144,10 @@ objectGrabTab:AddButton({
     end
 })
 
-objectGrabTab:AddToggle({
+local Toggle = ObjectGrabTab:CreateToggle({
     Name = "Auto Recover Dropped Parts",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AutoRecoverDroppedParts", 
     Callback = function(enabled)
         if enabled then
             if not AutoRecoverDroppedPartsCoroutine or coroutine.status(AutoRecoverDroppedPartsCoroutine) == "dead" then
@@ -1106,17 +1163,17 @@ objectGrabTab:AddToggle({
     end
 })
 
-objectGrabTab:AddButton({
+local Button = ObjectGrabTab:CreateButton({
     Name = "Unanchor Header Part",
     Callback = unanchorPrimaryPart
 })
 
-objectGrabTab:AddButton({
+local Button = ObjectGrabTab:CreateButton({
     Name = "Compile Group",
     Callback = compileGroup
 })
 
-objectGrabTab:AddButton({
+local Button = ObjectGrabTab:CreateButton({
     Name = "Start Compile Coroutine",
     Callback = function()
         if not compileCoroutine or coroutine.status(compileCoroutine) == "dead" then
@@ -1126,12 +1183,13 @@ objectGrabTab:AddButton({
     end
 })
 
--- Anti Grab Tab
-antiGrabTab:AddParagraph("Defense System", "Anti Grab & Protection")
+-- ANTI GRAB TAB
+local Paragraph = DefanseTab:CreateParagraph({Title = "Defense Tab", Content = "Anti Grab System"})
 
-antiGrabTab:AddToggle({
+local Toggle = DefanseTab:CreateToggle({
     Name = "Anti Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AutoStruggle", 
     Callback = function(enabled)
         if enabled then
             autoStruggleCoroutine = RunService.Heartbeat:Connect(function()
@@ -1167,9 +1225,10 @@ antiGrabTab:AddToggle({
     end
 })
 
-antiGrabTab:AddToggle({
+local Toggle = DefanseTab:CreateToggle({
     Name = "Anti Kick Grab",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AntiKickGrab", 
     Callback = function(enabled)
         if enabled then
             antiKickCoroutine = RunService.Heartbeat:Connect(function()
@@ -1193,9 +1252,10 @@ antiGrabTab:AddToggle({
     end
 })
 
-antiGrabTab:AddToggle({
+local Toggle = DefanseTab:CreateToggle({
     Name = "Anti Explosion",
-    Default = false,
+    CurrentValue = false,
+    Flag = "AntiExplosion", 
     Callback = function(enabled)
         if enabled then
             if localPlayer.Character then
@@ -1220,11 +1280,12 @@ antiGrabTab:AddToggle({
     end
 })
 
-antiGrabTab:AddSection("Self Defense")
+local Section = DefanseTab:CreateSection("Self Defense")
 
-antiGrabTab:AddToggle({
+local Toggle = DefanseTab:CreateToggle({
     Name = "Self Defense / Air Suspend",
-    Default = false,
+    CurrentValue = false,
+    Flag = "SelfDefenseAirSuspend", 
     Callback = function(enabled)
         if enabled then
             autoDefendCoroutine = coroutine.create(function()
@@ -1263,13 +1324,14 @@ antiGrabTab:AddToggle({
     end
 })
 
--- Blobman Tab
-blobmanTab:AddParagraph("Blobman Control", "Destroy server with Blobman")
+-- BLOBMAN TAB
+local Paragraph = BlobmanTab:CreateParagraph({Title = "Blobman Tab", Content = "Destroy server with Blobman"})
 
-local blobmanToggle
-blobmanToggle = blobmanTab:AddToggle({
-    Name = "Destroy Server",
-    Default = false,
+local blobman1
+blobman1 = BlobmanTab:CreateToggle({
+    Name = "Destroy server",
+    CurrentValue = false,
+    Flag = "", 
     Callback = function(enabled)
         if enabled then
             blobmanCoroutine = coroutine.create(function()
@@ -1284,12 +1346,12 @@ blobmanToggle = blobmanTab:AddToggle({
                     end
                 end
                 if not foundBlobman then
-                    OrionLib:MakeNotification({
-                        Name = "Error",
-                        Content = "You must be mounted upon a blobman to begin this process!",
-                        Time = 3
+                    Rayfield:Notify({
+                        Title = "Error",
+                        Content = "You must be mounted upon a blobman!",
+                        Duration = 3,
                     })
-                    blobmanToggle:SetValue(false)
+                    blobman1:Set(false)
                     blobman = nil
                     coroutine.close(blobmanCoroutine)
                     blobmanCoroutine = nil
@@ -1320,66 +1382,67 @@ blobmanToggle = blobmanTab:AddToggle({
     end
 })
 
-blobmanTab:AddSlider({
-    Name = "Destroy Server Speed",
-    Min = 0.05,
-    Max = 1,
-    Default = 0.5,
-    Color = Color3.fromRGB(255, 255, 255),
+local Slider = BlobmanTab:CreateSlider({
+    Name = "Destroy server Speed",
+    Range = {0.05, 1},
     Increment = 0.01,
-    ValueName = "Delay",
+    Suffix = "",
+    CurrentValue = 0.5,
+    Flag = "Slider1",
     Callback = function(Value)
-        _G.BlobmanDelay = Value
-    end
+         _G.BlobmanDelay = Value
+    end,
 })
 
--- Fun Tab
-funTab:AddParagraph("Fun & Troll", "Troll other players!")
+-- FUN TAB
+local Paragraph = FunTab:CreateParagraph({Title = "Fun Tab", Content = "Troll and Fun!"})
+local Section = FunTab:CreateSection("Troll")
 
-funTab:AddSection("Troll")
-
-funTab:AddInput({
+local Input = FunTab:CreateInput({
     Name = "Number of coins",
-    Default = "",
+    CurrentValue = "",
     PlaceholderText = "Number",
+    RemoveTextAfterFocusLost = false,
+    Flag = "Coin",
     Callback = function(Text)
-        skolko = Text
-    end
+        skolko = Text 
+    end,
 })
 
-funTab:AddButton({
+local Button = FunTab:CreateButton({
     Name = "Get Coin",
     Callback = function()
-        local coinAmount = tonumber(skolko) or 0
+        local coinAmount = tonumber(skolko) or 0 
         game.Players.LocalPlayer.PlayerGui.MenuGui.TopRight.CoinsFrame.CoinsDisplay.Coins.Text = tostring(coinAmount)
-    end
+    end,
 })
 
-funTab:AddSection("Decoy System")
+local Section = FunTab:CreateSection("Decoy System")
 
-funTab:AddSlider({
+local Slider = FunTab:CreateSlider({
     Name = "Offset",
-    Min = 1,
-    Max = 10,
-    Default = 10,
-    Color = Color3.fromRGB(255, 255, 255),
+    Range = {1, 10},
     Increment = 1,
-    ValueName = "Offset",
+    Suffix = "",
+    CurrentValue = 10,
+    Flag = "",
     Callback = function(Value)
         decoyOffset = Value
     end
 })
 
-funTab:AddInput({
+local Input = FunTab:CreateInput({
     Name = "Circle Radius",
-    Default = "",
+    CurrentValue = "",
     PlaceholderText = "Radius for Surround Mode",
+    RemoveTextAfterFocusLost = false,
+    Flag = "",
     Callback = function(Value)
         circleRadius = tonumber(Value) or 10
-    end
+    end,
 })
 
-funTab:AddButton({
+local Button = FunTab:CreateButton({
     Name = "Decoy Follow",
     Callback = function()
         local decoys = {}
@@ -1453,23 +1516,131 @@ funTab:AddButton({
         for _, decoy in pairs(decoys) do
             setupDecoy(decoy)
         end
-        OrionLib:MakeNotification({Name = "Notification", Content = "Got "..numDecoys.." units. Manually click each unit if they don't move", Time = 6})
+        Rayfield:Notify({Title = "Notification", Content = "Got "..numDecoys.." units", Duration = 5})
     end
 })
 
-funTab:AddButton({
-    Name = "Toggle Mode",
+local Button = FunTab:CreateButton({
+    Name = "Toggle Mode (Follow/Attack)",
     Callback = function()
         followMode = not followMode
-    end
+    end,
 })
 
-funTab:AddButton({
+local Button = FunTab:CreateButton({
     Name = "Disconnect Clones",
     Callback = function()
         cleanupConnections(connections)
     end
 })
 
--- Initialize Window
-OrionLib:Init()
+-- SCRIPT TAB & SAVED SCRIPTS
+local SaveFileName = "Hexer_hub_SavedScripts.json"
+local SavedScriptsDB = {
+    ["Infinite Yield"] = 'loadstring(game:HttpGet("https://raw.githubusercontent.com/EdgeIY/infiniteyield/master/source"))()'
+}
+
+pcall(function()
+    if isfile and isfile(SaveFileName) then
+        local data = readfile(SaveFileName)
+        local decoded = HttpService:JSONDecode(data)
+        for k, v in pairs(decoded) do
+            SavedScriptsDB[k] = v
+        end
+    end
+end)
+
+local function SaveScriptsToFile()
+    pcall(function()
+        if writefile then
+            writefile(SaveFileName, HttpService:JSONEncode(SavedScriptsDB))
+        end
+    end)
+end
+
+for scriptName, scriptCode in pairs(SavedScriptsDB) do
+    SavedScriptsTab:CreateButton({
+        Name = scriptName,
+        Callback = function()
+            local success, err = pcall(function()
+                loadstring(scriptCode)()
+            end)
+            if not success then 
+                Rayfield:Notify({Title = "Error", Content = "Script failed!", Duration = 3})
+            end
+        end,
+    })
+end
+
+local currentScriptCode = ""
+local currentScriptName = ""
+
+ScriptTab:CreateParagraph({Title = "Script Executor", Content = "Paste your script below"})
+
+ScriptTab:CreateInput({
+    Name = "Paste Script",
+    PlaceholderText = "Paste Lua code here...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        currentScriptCode = Text
+    end,
+})
+
+ScriptTab:CreateButton({
+    Name = "Execute Script",
+    Callback = function()
+        if currentScriptCode ~= "" then
+            local success, err = pcall(function()
+                loadstring(currentScriptCode)()
+            end)
+            if not success then 
+                Rayfield:Notify({Title = "Error", Content = "Failed to execute!", Duration = 3})
+            else
+                Rayfield:Notify({Title = "Success", Content = "Script executed!", Duration = 2})
+            end
+        else
+            Rayfield:Notify({Title = "Warning", Content = "Paste a script first!", Duration = 2})
+        end
+    end,
+})
+
+ScriptTab:CreateDivider()
+
+ScriptTab:CreateInput({
+    Name = "Script Name to Save",
+    PlaceholderText = "Ex: Fly Script...",
+    RemoveTextAfterFocusLost = false,
+    Callback = function(Text)
+        currentScriptName = Text
+    end,
+})
+
+ScriptTab:CreateButton({
+    Name = "Save Script",
+    Callback = function()
+        if currentScriptName == "" or currentScriptName:match("^%s*$") then
+            Rayfield:Notify({Title = "Error", Content = "Enter a name for the script!", Duration = 3})
+            return
+        end
+        if currentScriptCode == "" or currentScriptCode:match("^%s*$") then
+            Rayfield:Notify({Title = "Error", Content = "Script box is empty!", Duration = 3})
+            return
+        end
+        SavedScriptsDB[currentScriptName] = currentScriptCode
+        SaveScriptsToFile()
+        SavedScriptsTab:CreateButton({
+            Name = currentScriptName,
+            Callback = function()
+                local success, err = pcall(function()
+                    loadstring(SavedScriptsDB[currentScriptName])()
+                end)
+                if not success then 
+                    Rayfield:Notify({Title = "Error", Content = "Failed to execute!", Duration = 3})
+                end
+            end,
+        })
+        Rayfield:Notify({Title = "Saved!", Content = "Script '" .. currentScriptName .. "' added!", Duration = 3})
+    end,
+})
+
+print("[Hexer_hub] Carregado com sucesso! Creditos: Nydev and LeoLeoVip")
