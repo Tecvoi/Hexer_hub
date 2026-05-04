@@ -269,7 +269,6 @@ local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/d
 local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 local U = loadstring(game:HttpGet("https://paste.ee/r/7X7NLEPB", true))()
 
--- Função de notificação compatível
 local function Notify(title, content, duration)
     Fluent:Notify({
         Title = title,
@@ -429,13 +428,23 @@ local function kickGrab()
     table.insert(kickGrabConnections, playerAddedConnection)
 end
 
+-- ==========================================================
+-- GRAB HANDLERS (CORRIGIDO: não age em si mesmo)
+-- ==========================================================
 local function grabHandler(grabType)
     while true do
         local success, err = pcall(function()
             local child = workspace:FindFirstChild("GrabParts")
             if child and child.Name == "GrabParts" then
                 local grabPart = child:FindFirstChild("GrabPart")
-                local grabbedPart = grabPart:FindFirstChild("WeldConstraint").Part1
+                if not grabPart then return end
+                local weld = grabPart:FindFirstChild("WeldConstraint")
+                if not weld or not weld.Part1 then return end
+                local grabbedPart = weld.Part1
+
+                -- ✅ CORREÇÃO: ignora se a parte grabbed é do próprio jogador
+                if grabbedPart:IsDescendantOf(playerCharacter) then return end
+
                 local head = grabbedPart.Parent:FindFirstChild("Head")
                 if head then
                     while workspace:FindFirstChild("GrabParts") do
@@ -450,6 +459,7 @@ local function grabHandler(grabType)
                             part.Position = Vector3.new(0, -200, 0)
                         end
                     end
+                    local partsTable = grabType == "poison" and poisonHurtParts or paintPlayerParts
                     for _, part in pairs(partsTable) do
                         part.Position = Vector3.new(0, -200, 0)
                     end
@@ -466,7 +476,14 @@ local function fireGrab()
             local child = workspace:FindFirstChild("GrabParts")
             if child and child.Name == "GrabParts" then
                 local grabPart = child:FindFirstChild("GrabPart")
-                local grabbedPart = grabPart:FindFirstChild("WeldConstraint").Part1
+                if not grabPart then return end
+                local weld = grabPart:FindFirstChild("WeldConstraint")
+                if not weld or not weld.Part1 then return end
+                local grabbedPart = weld.Part1
+
+                -- ✅ CORREÇÃO: ignora se é você mesmo
+                if grabbedPart:IsDescendantOf(playerCharacter) then return end
+
                 local head = grabbedPart.Parent:FindFirstChild("Head")
                 if head then arson(head) end
             end
@@ -481,9 +498,16 @@ local function noclipGrab()
             local child = workspace:FindFirstChild("GrabParts")
             if child and child.Name == "GrabParts" then
                 local grabPart = child:FindFirstChild("GrabPart")
-                local grabbedPart = grabPart:FindFirstChild("WeldConstraint").Part1
+                if not grabPart then return end
+                local weld = grabPart:FindFirstChild("WeldConstraint")
+                if not weld or not weld.Part1 then return end
+                local grabbedPart = weld.Part1
+
+                -- ✅ CORREÇÃO: ignora se é você mesmo
+                if grabbedPart:IsDescendantOf(playerCharacter) then return end
+
                 local character = grabbedPart.Parent
-                if character.HumanoidRootPart then
+                if character and character:FindFirstChild("HumanoidRootPart") then
                     while workspace:FindFirstChild("GrabParts") do
                         for _, part in pairs(character:GetChildren()) do
                             if part:IsA("BasePart") then part.CanCollide = false end
@@ -499,6 +523,7 @@ local function noclipGrab()
         wait()
     end
 end
+-- ==========================================================
 
 local function spawnItemCf(itemName, cframe)
     task.spawn(function()
@@ -1417,7 +1442,6 @@ Tabs.Defense:AddToggle("AntiExplosion", {
     end,
 })
 
--- Anti-Blobman
 local antiBlobmanThread = nil
 Tabs.Defense:AddToggle("AntiBlobman", {
     Title = "Anti-Blobman", Default = false,
@@ -1841,7 +1865,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- KILL
                 Tabs.Admin:AddButton({
                     Title = "💀 Kill",
                     Callback = function()
@@ -1854,7 +1877,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- LOOPKILL
                 Tabs.Admin:AddToggle("AdminLK", {
                     Title = "🔁 LoopKill", Default = false,
                     Callback = function(Value)
@@ -1872,7 +1894,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- KICK
                 Tabs.Admin:AddButton({
                     Title = "👢 Kick",
                     Callback = function()
@@ -1885,7 +1906,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- BAN
                 Tabs.Admin:AddButton({
                     Title = "🔨 Ban (Permanente)",
                     Callback = function()
@@ -1898,7 +1918,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- JUMPSCARE
                 Tabs.Admin:AddButton({
                     Title = "😱 JumpScare",
                     Callback = function()
@@ -1911,7 +1930,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- BRING
                 Tabs.Admin:AddButton({
                     Title = "🧲 Bring (Puxar até mim)",
                     Callback = function()
@@ -1924,7 +1942,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- FREEZE
                 Tabs.Admin:AddToggle("AdminFreeze", {
                     Title = "🧊 Freezer (Congelar)", Default = false,
                     Callback = function(Value)
@@ -1942,7 +1959,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- BYPASS
                 Tabs.Admin:AddToggle("AdminBypass", {
                     Title = "🛡️ Bypass (Imunidade)", Default = false,
                     Callback = function(Value)
@@ -1961,7 +1977,6 @@ Tabs.Admin:AddButton({
                     end,
                 })
 
-                -- CHAT
                 Tabs.Admin:AddInput("AdminChatMsg", {
                     Title = "Mensagem para o player falar",
                     Default = "", Placeholder = "Ex: Olá, eu sou controlado!",
@@ -1997,9 +2012,5 @@ Tabs.Admin:AddButton({
         end
     end,
 })
-
--- ==========================================================
--- MINIMIZAR COM G (já configurado no MinimizeKey acima)
--- ==========================================================
 
 Window:SelectTab(1)
